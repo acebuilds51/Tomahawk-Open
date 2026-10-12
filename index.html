@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tomahawk Roommates Scramble</title>
+<meta name="theme-color" content="#1e4631">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scramble">
+<link rel="icon" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+
+/* Layout: one phone-first column. Green leaderboard board with the logo and all six rooms, then one card per room, scorekeeper tools last. */
+:root{
+  --bg:#f3f5f1;--surface:#ffffff;--ink:#16231b;--muted:#5a6a5f;--line:#d8e0d5;
+  --board:#1e4631;--board-ink:#f3f7f1;--board-muted:#a9c2b0;--board-row:#285640;
+  --under:#b81c30;--under-soft:#fbe4e7;--over:#3d4f86;--over-soft:#e5e9f5;--par:#e8ece5;
+  --gold:#b98a1e;--gold-soft:#f6ecd2;--ok:#2d7a46;--ok-soft:#e1f2e6;--warn:#8a5200;--warn-soft:#fff1d6;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1511;--surface:#16211a;--ink:#e6eee8;--muted:#93a598;--line:#2a3a30;
+  --board:#163522;--board-ink:#eef5ef;--board-muted:#8fb09a;--board-row:#1f4530;
+  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#223029;
+  --gold:#e0b44a;--gold-soft:#33290f;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1511;--surface:#16211a;--ink:#e6eee8;--muted:#93a598;--line:#2a3a30;
+  --board:#163522;--board-ink:#eef5ef;--board-muted:#8fb09a;--board-row:#1f4530;
+  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#223029;
+  --gold:#e0b44a;--gold-soft:#33290f;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:16px 56px;display:grid;gap:14px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.logo{width:170px;max-width:50%;aspect-ratio:327/316;margin:0 auto 2px;background-size:contain;background-repeat:no-repeat;background-position:center;background-image:url("logo.png")}
+.board{background:var(--board);color:var(--board-ink);border-radius:14px;padding:18px 16px 16px;display:grid;gap:8px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--board-muted);text-align:center}
+h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:.03em;margin:0 0 4px;text-transform:uppercase;text-align:center;text-wrap:balance}
+.lb{display:grid;gap:4px}
+.lr{display:grid;grid-template-columns:44px minmax(0,1fr) auto auto;gap:10px;align-items:center;background:var(--board-row);border-radius:8px;padding:8px 12px}
+.lr .pos{font-family:var(--display);font-size:22px;font-weight:700;color:var(--board-muted)}
+.lr.p1 .pos,.lr.p2 .pos,.lr.p3 .pos{color:var(--gold)}
+.lr .nm{min-width:0}
+.lr .nm b{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:.04em;display:block;line-height:1.1}
+.lr .nm span{font-size:12px;color:var(--board-muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .th{font-size:13px;color:var(--board-muted);white-space:nowrap}
+.lr .sc{font-family:var(--display);font-size:30px;font-weight:700;min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums}
+.sub{margin:0;text-align:center;font-size:13px;color:var(--board-muted)}
+.team{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;min-width:0}
+.ttop{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tn{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase}
+.pot{font-size:12px;font-weight:600;background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:2px 10px;margin-left:6px;vertical-align:3px;font-family:var(--body);letter-spacing:0;text-transform:none}
+.pl{font-size:14px;color:var(--muted)}
+.stats{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.holes{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px}
+.hc{border-radius:5px;background:var(--par);text-align:center;padding:3px 0;font-size:11px;line-height:1.25;color:var(--muted);font-variant-numeric:tabular-nums}
+.hc b{display:block;font-size:13px;color:var(--ink);font-weight:600}
+.hc.u{background:var(--under-soft)} .hc.u b{color:var(--under)}
+.hc.o{background:var(--over-soft)} .hc.o b{color:var(--over)}
+.hc.e{background:transparent;border:1px dashed var(--line)}
+.rules{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:6px}
+.rules h2,.keeper h2{font-family:var(--display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:0}
+.rules p{margin:0;font-size:15px}
+.keeper{background:var(--surface);border:2px solid var(--board);border-radius:12px;padding:16px;display:grid;gap:14px;min-width:0}
+.lab{font-size:13px;color:var(--muted);margin-bottom:6px;display:block}
+.picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pick{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 0;font-family:var(--display);font-weight:600;font-size:20px}
+.pick[aria-pressed="true"]{background:var(--board);color:var(--board-ink);border-color:var(--board)}
+.note{font-size:14px;color:var(--muted);margin:6px 0 0}
+select{font:inherit;font-size:16px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;min-width:0}
+.step{border-radius:10px;padding:14px 6px;display:grid;justify-items:center;gap:8px;background:var(--bg)}
+.step .row{display:flex;gap:18px;align-items:center}
+.step .v{font-family:var(--display);font-size:60px;font-weight:700;line-height:1;min-width:1.2em;text-align:center;font-variant-numeric:tabular-nums}
+.step .rel{font-size:15px;font-weight:600}
+.sb{width:58px;height:58px;border-radius:50%;border:2px solid var(--board);background:var(--surface);font-size:30px;font-weight:600;line-height:1;color:var(--ink)}
+.save{background:var(--board);color:var(--board-ink);border:0;border-radius:10px;padding:16px;font-family:var(--display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;width:100%}
+.save[aria-busy="true"]{opacity:.7}
+.ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:9px 16px;color:var(--muted);font-size:14px}
+.msg{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:15px}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg button{margin-top:8px;display:block}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600}
+.setup{display:grid;gap:8px;margin-top:12px}
+.tk{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--bg)}
+.tk .row{display:flex;gap:10px;align-items:center}
+.tk .v{font-family:var(--display);font-size:24px;font-weight:700;min-width:1.4em;text-align:center}
+.tk .sb{width:40px;height:40px;font-size:22px}
+.foot{text-align:center;color:var(--muted);font-size:13px;display:grid;gap:10px;justify-items:center;margin-top:6px}
+@media (max-width:420px){.lr{grid-template-columns:36px minmax(0,1fr) auto;}.lr .th{display:none}}
+.live{display:inline-flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.dot.off{background:var(--warn)}
+.banner{padding:12px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:15px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function(){
+/* ===== Settings: change these lines only ===== */
+var API_URL='https://script.google.com/macros/s/AKfycbxE2TauUGWd6oawawxkVuR8aaFRzWqLTdq4pd0EezxxryBKuxtaFhfOrtG4C8ZGvlQxAg/exec';   // Apps Script Web app URL, ends in /exec
+var EVENT_LINE='Tomahawk Open 2026 · Meadowlands GC · Mon Oct 12';
+var PAR=[4,4,4,5,3,4,4,3,5,4,3,4,4,5,3,4,4,5];
+var HCP=[7,5,1,15,13,3,17,11,9,12,10,4,2,14,18,6,16,8];
+var TEAMS=[
+  {id:'1707',p:['Rock','Opie','Gumby','Teo']},
+  {id:'905',p:['Fitz','Blanch','Scoobie','Doc']},
+  {id:'906',p:['Moses','Jimmy C','Angelo','Chub-Rock']},
+  {id:'205',p:['Nater','Nooner','Flyin Pat','Ace']},
+  {id:'505',p:['Fairway Ninja','Kripla','Welks','Kipper']},
+  {id:'1605',p:['PT','Zen','Billy','Smitty']}
+];
+/* ============================================= */
+var POLL_MS=10000;
+var KEY='rm27';
+var root=document.getElementById('root');
+var HARD=HCP.map(function(v,i){return {h:i+1,v:v};}).sort(function(a,b){return a.v-b.v;}).map(function(o){return o.h;});
+var configured=/^https:\/\/script\.google(usercontent)?\.com\//.test(API_URL);
+
+function store(){return {get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};}
+var ls=store();
+function readJSON(k,d){try{var v=JSON.parse(ls.get(k)||'null');return v==null?d:v;}catch(e){return d;}}
+
+function emptyState(){var s={scores:{},ticks:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.ticks[t.id]=0;});return s;}
+function normalize(s){var o=emptyState();if(!s)return o;
+  TEAMS.forEach(function(t){var sc=(s.scores&&s.scores[t.id])||{};for(var h in sc){var n=+h,v=+sc[h];if(n>=1&&n<=18&&v>=1)o.scores[t.id][n]=v;}
+    o.ticks[t.id]=Math.max(0,+((s.ticks||{})[t.id])||0);});
+  o.updated=s.updated||null;return o;}
+
+var server=normalize(readJSON(KEY+'-cache',null));   // last copy from the Sheet
+var queue=readJSON(KEY+'-queue',[]);                  // saves not yet confirmed by the Sheet
+if(!Array.isArray(queue))queue=[];
+var net={ok:null,lastOk:null,flushing:false,loading:false};
+var state=server;
+
+function applyQueue(){
+  var s=JSON.parse(JSON.stringify(server));
+  queue.forEach(function(op){
+    if(op.action==='score')s.scores[op.room][op.hole]=op.strokes;
+    else if(op.action==='clear')delete s.scores[op.room][op.hole];
+    else if(op.action==='ticks')TEAMS.forEach(function(t){s.ticks[t.id]=op.ticks[t.id]||0;});
+  });
+  state=s;
+}
+applyQueue();
+function anyTicks(){return TEAMS.some(function(t){return state.ticks[t.id]>0;});}
+
+var keeper=ls.get(KEY+'-keeper')==='1';
+var savedTeam=ls.get(KEY+'-team');
+var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null,draft:null};
+
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function rel(n){return n===0?'E':n>0?'+'+n:'−'+Math.abs(n);}
+function clock(iso){if(!iso)return '';try{return new Date(iso).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});}catch(e){return '';}}
+function nextHole(id){var s=state.scores[id];for(var h=1;h<=18;h++)if(s[h]==null)return h;return 18;}
+
+function stat(t){var s=state.scores[t.id],n=0,gross=0,par=0,last=0;
+  for(var h=1;h<=18;h++){if(s[h]==null)continue;n++;gross+=s[h];par+=PAR[h-1];last=h;}
+  var ticks=state.ticks[t.id]||0;
+  return {t:t,n:n,gross:gross,toPar:gross-par,ticks:ticks,net:gross-par-ticks,last:last};}
+function countback(a,b){
+  var sa=state.scores[a.t.id],sb=state.scores[b.t.id];
+  for(var i=0;i<HARD.length;i++){var h=HARD[i];if(sa[h]==null||sb[h]==null)continue;if(sa[h]!==sb[h])return sa[h]-sb[h];}
+  return 0;}
+function standings(){
+  var rows=TEAMS.map(stat);
+  rows.sort(function(a,b){if(!a.n&&!b.n)return 0;if(!a.n)return 1;if(!b.n)return -1;if(a.net!==b.net)return a.net-b.net;return countback(a,b);});
+  var pos=0;rows.forEach(function(r,i){
+    if(!r.n){r.pos='–';return;}
+    if(i>0&&rows[i-1].n&&rows[i-1].net===r.net&&countback(rows[i-1],r)===0){r.pos=rows[i-1].pos;r.tie=true;rows[i-1].tie=true;}
+    else{pos=i+1;r.pos=pos;}
+  });
+  return rows;}
+
+function liveLine(){
+  if(!configured)return '';
+  var waiting=queue.length?' · '+queue.length+' save'+(queue.length>1?'s':'')+' waiting for signal':'';
+  if(net.ok===false)return '<span class="live"><span class="dot off"></span>No connection, retrying'+waiting+'</span>';
+  if(net.ok===null)return '<span class="live">Loading scores…</span>';
+  return '<span class="live"><span class="dot"></span>Live'+(state.updated?' · last score '+clock(state.updated):'')+waiting+'</span>';
+}
+
+function boardHtml(rows){
+  var started=rows.some(function(r){return r.n;});
+  var lb=rows.map(function(r){
+    var p=typeof r.pos==='number'?r.pos:0;
+    var label=typeof r.pos==='number'?((r.tie?'T':'')+r.pos):'–';
+    var thru=!r.n?'Not started':r.n===18?'Final':'Thru '+r.last;
+    return '<div class="lr'+(p&&p<=3?' p'+p:'')+'"><span class="pos">'+label+'</span><span class="nm"><b>Room '+r.t.id+'</b><span>'+r.t.p.map(esc).join(' · ')+'</span></span><span class="th">'+thru+'</span><span class="sc">'+(r.n?rel(r.net):'–')+'</span></div>';
+  }).join('');
+  var note=started?('Score is to par'+(anyTicks()?', after ticks':'')+'. Top 3 rooms win a pot.'):'Par 72 · Top 3 rooms win a pot';
+  return '<header class="board"><div class="logo" role="img" aria-label="Tomahawk Open 2026: Fairways, Friends, Filets"></div><div class="eyebrow">'+esc(EVENT_LINE)+'</div>'+
+    '<h1>Roommates Scramble</h1><div class="lb">'+lb+'</div>'+
+    '<p class="sub">'+note+'</p><p class="sub">'+liveLine()+'</p></header>';
+}
+
+function teamHtml(r){
+  var s=state.scores[r.t.id],cells='';
+  for(var h=1;h<=18;h++){var v=s[h];
+    if(v==null){cells+='<div class="hc e">'+h+'<b>&nbsp;</b></div>';continue;}
+    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+h+'<b>'+v+'</b></div>';}
+  var pot=(typeof r.pos==='number'&&r.pos<=3&&r.n)?'<span class="pot">Pot '+r.pos+'</span>':'';
+  var tk=r.ticks>0?'<span>Ticks <b>'+r.ticks+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
+  return '<article class="team"><div class="ttop"><span class="tn">Room '+r.t.id+pot+'</span><span class="pl">'+r.t.p.map(esc).join(', ')+'</span></div>'+
+    '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.last||0)+'</b></span><span>Strokes <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+tk+'</div>'+
+    '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div></article>';
+}
+
+function rulesHtml(){
+  return '<section class="rules"><h2>Today’s rules</h2>'+
+    '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green.</p>'+
+    '<p>At least 2 tee shots from every player over 18 holes. No breakfast balls off #1.</p>'+
+    '<p>No 3-putts: miss the first putt and the second is a gimme. Max 2 putts a hole.</p>'+
+    '<p>Ghost holes: once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out.</p>'+
+    '<p>Ties: 4-hole putt-off if there’s daylight, otherwise best score on the hardest hole on the card (#3, then #13, #6 and so on).</p></section>';
+}
+
+function keeperHtml(){
+  var id=ui.team,s=state.scores[id];
+  if(ui.hole==null)ui.hole=nextHole(id);
+  var h=ui.hole,ex=s[h];
+  if(ui.v==null)ui.v=ex!=null?ex:PAR[h-1];
+  var team=TEAMS.filter(function(t){return t.id===id;})[0];
+  var picks=TEAMS.map(function(t){return '<button class="pick" data-act="pick" data-t="'+t.id+'" aria-pressed="'+(t.id===id)+'">'+t.id+'</button>';}).join('');
+  var opts='';for(var x=1;x<=18;x++){opts+='<option value="'+x+'"'+(x===h?' selected':'')+'>Hole '+x+' · Par '+PAR[x-1]+(s[x]!=null?' · saved '+s[x]:'')+'</option>';}
+  var d=ui.v-PAR[h-1],word=d<=-3?'Albatross':d===-2?'Eagle':d===-1?'Birdie':d===0?'Par':d===1?'Bogey':d===2?'Double bogey':rel(d);
+  var msg=ui.msg?'<div class="msg'+(ui.msg.k==='ok'?' ok':'')+'" role="status">'+esc(ui.msg.t)+'</div>':'';
+  var setup='';
+  if(ui.draft){
+    setup='<div class="setup"><p class="note">Only if the Competition Committee hands out ticks (Bonus #2). Each tick is one stroke off that room’s total. Leave everyone at 0 if there are none.</p>'+
+      TEAMS.map(function(t){return '<div class="tk"><span>Room '+t.id+'</span><div class="row"><button class="sb" data-act="tk-" data-t="'+t.id+'" aria-label="Fewer ticks for room '+t.id+'">−</button><span class="v">'+ui.draft[t.id]+'</span><button class="sb" data-act="tk+" data-t="'+t.id+'" aria-label="More ticks for room '+t.id+'">+</button></div></div>';}).join('')+
+      '<button class="save" data-act="save-ticks">Save ticks</button></div>';
+  }
+  return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
+    '<div><span class="lab">Room</span><div class="picks">'+picks+'</div><p class="note">'+team.p.map(esc).join(', ')+'</p></div>'+
+    '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+
+    '<div class="step"><div class="row"><button class="sb" data-act="v-" aria-label="Score down">−</button><span class="v">'+ui.v+'</span><button class="sb" data-act="v+" aria-label="Score up">+</button></div><span class="rel">'+word+'</span></div>'+
+    '<button class="save" data-act="save-hole">'+(ex!=null?'Update hole '+h:'Save hole '+h)+'</button>'+
+    (ex!=null?'<button class="ghost" data-act="clear-hole">Remove hole '+h+' score</button>':'')+
+    '<details'+(ui.draft?' open':'')+'><summary data-act="setup-toggle">Ticks (only if the committee gives any)</summary>'+setup+'</details></section>';
+}
+
+function render(){
+  var rows=standings(),h='<div class="wrap">';
+  if(!configured)h+='<div class="banner">Setup not finished: paste the Apps Script Web app URL into API_URL at the top of the script.</div>';
+  h+=boardHtml(rows)+rows.map(teamHtml).join('')+rulesHtml();
+  if(keeper)h+=keeperHtml();
+  h+='<footer class="foot">'+(keeper?'<button class="ghost" data-act="keeper-off">Hide scorekeeper tools</button>':'<button class="ghost" data-act="keeper-on">I’m keeping score</button>')+
+    '<span>Scores show up on every phone within about 10 seconds.</span></footer></div>';
+  var y=window.scrollY;root.innerHTML=h;window.scrollTo(0,y);
+}
+
+/* ---------- Talking to the Sheet ---------- */
+function saveQueue(){ls.set(KEY+'-queue',JSON.stringify(queue));}
+function takeServer(s){server=normalize(s);ls.set(KEY+'-cache',JSON.stringify(server));net.ok=true;net.lastOk=Date.now();applyQueue();}
+
+function load(){
+  if(!configured||net.loading||net.flushing)return Promise.resolve();
+  net.loading=true;
+  return fetch(API_URL+(API_URL.indexOf('?')<0?'?':'&')+'t='+Date.now(),{cache:'no-store'})
+    .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
+    .then(function(s){if(!net.flushing){takeServer(s);}net.loading=false;render();})
+    .catch(function(){net.loading=false;net.ok=false;render();});
+}
+
+var retryTimer=null;
+function flush(){
+  if(!configured||net.flushing||!queue.length)return;
+  net.flushing=true;
+  var op=queue[0];
+  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,ticks:op.ticks};
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
+    .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
+    .then(function(res){
+      net.flushing=false;
+      if(res&&res.ok){
+        queue.shift();saveQueue();takeServer(res);
+      }else if(res&&(res.error==='busy')){
+        throw new Error('busy');
+      }else{
+        // The Sheet rejected it (bad hole or score); drop it so it doesn't block the rest.
+        queue.shift();saveQueue();applyQueue();
+        ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
+      }
+      render();
+      if(queue.length)flush();
+    })
+    .catch(function(){
+      net.flushing=false;net.ok=false;render();
+      clearTimeout(retryTimer);retryTimer=setTimeout(flush,8000);
+    });
+}
+
+function enqueue(op,okText){
+  // A newer save for the same hole replaces an unsent older one.
+  if(op.action==='score'||op.action==='clear')queue=queue.filter(function(q){return !((q.action==='score'||q.action==='clear')&&q.room===op.room&&q.hole===op.hole&&q!==queue[0]);});
+  if(op.action==='ticks')queue=queue.filter(function(q,i){return q.action!=='ticks'||i===0;});
+  queue.push(op);saveQueue();applyQueue();
+  ui.msg={k:'ok',t:okText};
+  ui.hole=null;ui.v=null;ui.draft=null;
+  render();flush();
+}
+
+root.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]');if(!el)return;var a=el.getAttribute('data-act');
+  if(a==='hole')return;
+  if(a==='setup-toggle'){e.preventDefault();ui.draft=ui.draft?null:clone(state.ticks);render();return;}
+  if(a==='keeper-on'){keeper=true;ls.set(KEY+'-keeper','1');render();var k=document.getElementById('keeper');if(k&&k.scrollIntoView)k.scrollIntoView({behavior:'smooth',block:'start'});return;}
+  if(a==='keeper-off'){keeper=false;ls.set(KEY+'-keeper','0');render();return;}
+  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
+  if(a==='v-'){ui.v=Math.max(1,ui.v-1);render();return;}
+  if(a==='v+'){ui.v=Math.min(15,ui.v+1);render();return;}
+  if(a==='tk-'||a==='tk+'){var t=el.getAttribute('data-t');ui.draft[t]=Math.max(0,Math.min(18,ui.draft[t]+(a==='tk+'?1:-1)));render();return;}
+  if(!configured){ui.msg={k:'warn',t:'Saving isn’t set up yet.'};render();return;}
+  if(a==='save-hole'){var h=ui.hole,v=ui.v;enqueue({action:'score',room:ui.team,hole:h,strokes:v},'Hole '+h+' saved ('+v+').');return;}
+  if(a==='clear-hole'){var h2=ui.hole;enqueue({action:'clear',room:ui.team,hole:h2},'Hole '+h2+' removed.');return;}
+  if(a==='save-ticks'){enqueue({action:'ticks',ticks:clone(ui.draft)},'Ticks saved.');return;}
+});
+root.addEventListener('change',function(e){
+  var el=e.target;
+  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;render();}
+});
+
+render();
+if(configured){
+  load().then(flush);
+  setInterval(function(){if(!document.hidden){if(queue.length)flush();else load();}},POLL_MS);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden){if(queue.length)flush();else load();}});
+  window.addEventListener('online',function(){flush();load();});
+}
+})();
+</script>
+</body>
+</html>
