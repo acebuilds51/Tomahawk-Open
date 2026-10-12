@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tomahawk Roommates Scramble</title>
-<meta name="theme-color" content="#1e4631">
+<meta name="theme-color" content="#561520">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Scramble">
 <link rel="icon" href="logo.png">
@@ -16,23 +16,23 @@ body{margin:0}
 
 /* Layout: one phone-first column. Green leaderboard board with the logo and all six rooms, then one card per room, scorekeeper tools last. */
 :root{
-  --bg:#f3f5f1;--surface:#ffffff;--ink:#16231b;--muted:#5a6a5f;--line:#d8e0d5;
-  --board:#1e4631;--board-ink:#f3f7f1;--board-muted:#a9c2b0;--board-row:#285640;
-  --under:#b81c30;--under-soft:#fbe4e7;--over:#3d4f86;--over-soft:#e5e9f5;--par:#e8ece5;
-  --gold:#b98a1e;--gold-soft:#f6ecd2;--ok:#2d7a46;--ok-soft:#e1f2e6;--warn:#8a5200;--warn-soft:#fff1d6;
+  --bg:#f7f2f1;--surface:#ffffff;--ink:#231618;--muted:#6a5a5c;--line:#e6d8d9;
+  --board:#561520;--board-ink:#fbf3f3;--board-muted:#dcb3b9;--board-row:#6b2231;
+  --under:#b81c30;--under-soft:#fbe4e7;--over:#3d4f86;--over-soft:#e5e9f5;--par:#efe7e6;
+  --gold:#e6b54d;--gold-soft:#f8ecd4;--gold-ink:#8a5f0e;--ok:#2d7a46;--ok-soft:#e1f2e6;--warn:#8a5200;--warn-soft:#fff1d6;
   --display:"Barlow Condensed","Arial Narrow",sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0e1511;--surface:#16211a;--ink:#e6eee8;--muted:#93a598;--line:#2a3a30;
-  --board:#163522;--board-ink:#eef5ef;--board-muted:#8fb09a;--board-row:#1f4530;
-  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#223029;
-  --gold:#e0b44a;--gold-soft:#33290f;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}}
+  --bg:#140d0e;--surface:#201517;--ink:#f1e6e7;--muted:#b09a9d;--line:#3a2a2c;
+  --board:#4a111b;--board-ink:#fbf1f2;--board-muted:#cfa1a8;--board-row:#5f1c29;
+  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#2c2022;
+  --gold:#e6b54d;--gold-soft:#3a2a12;--gold-ink:#e6b54d;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0e1511;--surface:#16211a;--ink:#e6eee8;--muted:#93a598;--line:#2a3a30;
-  --board:#163522;--board-ink:#eef5ef;--board-muted:#8fb09a;--board-row:#1f4530;
-  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#223029;
-  --gold:#e0b44a;--gold-soft:#33290f;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}
+  --bg:#140d0e;--surface:#201517;--ink:#f1e6e7;--muted:#b09a9d;--line:#3a2a2c;
+  --board:#4a111b;--board-ink:#fbf1f2;--board-muted:#cfa1a8;--board-row:#5f1c29;
+  --under:#f26b7a;--under-soft:#3a1a20;--over:#9fb0e8;--over-soft:#1d2440;--par:#2c2022;
+  --gold:#e6b54d;--gold-soft:#3a2a12;--gold-ink:#e6b54d;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
 .wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:16px 56px;display:grid;gap:14px}
@@ -55,7 +55,7 @@ h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:.03e
 .team{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;min-width:0}
 .ttop{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .tn{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase}
-.pot{font-size:12px;font-weight:600;background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:2px 10px;margin-left:6px;vertical-align:3px;font-family:var(--body);letter-spacing:0;text-transform:none}
+.pot{font-size:12px;font-weight:600;background:var(--gold-soft);color:var(--gold-ink);border-radius:999px;padding:2px 10px;margin-left:6px;vertical-align:3px;font-family:var(--body);letter-spacing:0;text-transform:none}
 .pl{font-size:14px;color:var(--muted)}
 .stats{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
 .stats b{color:var(--ink);font-variant-numeric:tabular-nums}
