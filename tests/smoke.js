@@ -50,26 +50,32 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  drive('Fitz'); q('[data-act=save-hole]').click(); await wait(30);              // hole 2: 4, Fitz
  drive('Doc'); q('[data-act=save-hole]').click(); await wait(30);               // hole 3: 4, Doc
  check('drives saved to the Sheet',rows().includes('["905",1,3,"Fitz"]')&&rows().includes('["905",3,4,"Doc"]'),rows());
- const drv=id=>[...card(id).querySelectorAll('.drv span')].slice(1).map(s=>s.textContent).join(', ');
+ const drv=id=>[...card(id).querySelector('.drv').querySelectorAll('span')].slice(1).map(s=>s.textContent).join(', ');
  check('drive counts on the card',drv('905')==='Fitz 2, Blanch 0, Scoobie 0, Doc 1',drv('905'));
- // Ticks and ghost holes: Room 205 gets a tick on 1 and 5, ghost hole on 2
- const setPin=v=>{const p=q('#pin');p.value=v;p.dispatchEvent(new w.Event('input',{bubbles:true}));};
- const markBonus=()=>{q('[data-act=setup-toggle]').click(); q('[data-act=broom][data-t="205"]').click();
-  q('[data-act=bticks][data-h="1"]').click(); q('[data-act=bticks][data-h="5"]').click(); q('[data-act=bghosts][data-h="2"]').click();};
- markBonus(); q('[data-act=save-bonus]').click(); await wait(20);
- check('ticks need a PIN',q('.msg').textContent.includes('Enter the committee PIN'),q('.msg').textContent);
- setPin('1111'); q('[data-act=save-bonus]').click(); await wait(40);
- check('wrong PIN is rejected by the Sheet',q('.msg').textContent.includes('Wrong committee PIN')&&JSON.stringify(sheets.Bonus.rows.find(r=>r[0]==='205'))==='["205","",""]'&&!card('205').querySelector('.holes').textContent.includes('T'),q('.msg').textContent+' '+JSON.stringify(sheets.Bonus.rows));
- markBonus(); setPin('2468'); q('[data-act=save-bonus]').click(); await wait(40);
- check('Bonus tab saved as text lists',JSON.stringify(sheets.Bonus.rows.find(r=>r[0]==='205'))==='["205","1,5","2"]',JSON.stringify(sheets.Bonus.rows));
- check('card marks T and G holes',card('205').querySelector('.holes').textContent.includes('1T')&&card('205').querySelector('.holes').textContent.includes('2G'),card('205').querySelector('.holes').textContent);
+ // Strokes: 905 gets 1.5. Holes 1-3 = 3,4,4 on par 4,4,4 -> -1 to par -> net -2½
+ check('strokes come off the total (905 net −2½)',board().includes('Room 905 −2½'),board());
+ check('card shows their strokes and net',card('905').querySelector('.stats').textContent.includes('Their strokes 1½')&&card('905').querySelector('.stats').textContent.includes('Net −2½'),card('905').querySelector('.stats').textContent);
+ // Threesomes show 3 drive buttons and their note
+ q('[data-act=pick][data-t="906"]').click();
+ check('threesome has 3 drive buttons',qa('[data-act=drive]').length===3,qa('[data-act=drive]').map(b=>b.dataset.p).join(','));
+ check('threesome note on the card',card('906').textContent.includes('extra ball every shot'),'');
+ // Ghost holes: 205 gets 1 per side
  q('[data-act=pick][data-t="205"]').click(); pickHole(1);
- check('scorekeeper sees tick note on hole 1',qa('.bonusnote').some(n=>n.textContent.includes('Tick hole')),qa('.bonusnote').map(n=>n.textContent).join('/'));
- q('[data-act="v+"]').click(); drive('Ace'); q('[data-act=save-hole]').click(); await wait(30);  // 205 hole 1: 5 (bogey), tick
- check('tick counts only once hole is played (205 is E, not -1)',board().includes('Room 205 E'),board());
- check('card shows ticks 1 of 2',card('205').querySelector('.stats').textContent.includes('Ticks 1 of 2'),card('205').querySelector('.stats').textContent);
- pickHole(2);
- check('scorekeeper sees ghost note on hole 2',qa('.bonusnote').some(n=>n.textContent.includes('Ghost hole')),qa('.bonusnote').map(n=>n.textContent).join('/'));
+ q('[data-act="v+"]').click(); drive('Ace'); q('[data-act=ghost-yes]').click(); q('[data-act=save-hole]').click(); await wait(30);  // 205 hole 1: 5, ghost
+ check('ghost hole saved in the Drive column',rows().includes('["205",1,5,"Ace|ghost"]'),rows());
+ check('drive still counts with a ghost hole',drv('205').includes('Ace 1'),drv('205'));
+ check('card marks the G and shows front used',card('205').querySelector('.holes').textContent.includes('1G')&&card('205').textContent.includes('Front used (#1)'),card('205').textContent.slice(0,300));
+ check('205 board score is +1 (no strokes)',board().includes('Room 205 +1'),board());
+ pickHole(2); drive('Nater'); q('[data-act=ghost-yes]').click();
+ check('second front-9 ghost hole is blocked',q('.msg').textContent.includes('no ghost holes left on the front 9')&&q('[data-act=ghost-yes]').getAttribute('aria-pressed')==='false',q('.msg').textContent);
+ pickHole(10); drive('Nater'); q('[data-act=ghost-yes]').click(); q('[data-act=save-hole]').click(); await wait(30);
+ check('back-9 ghost hole allowed',rows().includes('["205",10,4,"Nater|ghost"]')&&card('205').textContent.includes('Back used (#10)'),rows());
+ pickHole(1);
+ check('existing ghost hole stays selected',q('[data-act=ghost-yes]').getAttribute('aria-pressed')==='true',q('[data-act=ghost-yes]').getAttribute('aria-pressed'));
+ // 905 gets 3 any time
+ q('[data-act=pick][data-t="905"]').click(); pickHole(5); drive('Blanch'); q('[data-act=ghost-yes]').click(); q('[data-act=save-hole]').click(); await wait(30);
+ check('905 ghost count 1 of 3',card('905').textContent.includes('1 of 3 used (#5)'),card('905').textContent.slice(0,400));
+ pickHole(5); q('[data-act=clear-hole]').click(); await wait(30);
  // offline save then recover
  offline=true; q('[data-act=pick][data-t="905"]').click(); q('[data-act="v-"]').click(); drive('Blanch'); q('[data-act=save-hole]').click(); await wait(30);
  check('offline save waits',qa('.sub')[1].textContent.includes('1 save waiting'),qa('.sub')[1].textContent);
@@ -90,7 +96,7 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  // second phone sees everything
  const w2=phone(); await wait(60);
  check('phone 2 sees same board',board(w2)===board(),board(w2)+' vs '+board());
- check('phone 2 sees drives and marks',[...w2.document.querySelectorAll('.drv')].some(d=>d.textContent.includes('Scoobie 1'))&&w2.document.body.textContent.includes('G = ghost hole'),'');
+ check('phone 2 sees drives and marks',[...w2.document.querySelectorAll('.drv')].some(d=>d.textContent.includes('Scoobie 1'))&&w2.document.body.textContent.includes('Front used (#1)'),'');
  const res=JSON.parse(ctx.doPost({postData:{contents:JSON.stringify({action:'bonus',bonus:{'905':{ticks:[1,2,3]}},pin:'2468 '})}}).text);
  check('PIN with a stray space still works',res.ok===true,JSON.stringify(res).slice(0,60));
  delete props.COMMITTEE_PIN;

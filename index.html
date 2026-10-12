@@ -128,13 +128,15 @@ var API_URL='https://script.google.com/macros/s/AKfycbxE2TauUGWd6oawawxkVuR8aaFR
 var EVENT_LINE='Tomahawk Open 2026 · Meadowlands GC · Mon Oct 12';
 var PAR=[4,4,4,5,3,4,4,3,5,4,3,4,4,5,3,4,4,5];
 var HCP=[7,5,1,15,13,3,17,11,9,12,10,4,2,14,18,6,16,8];
+// strokes: taken off the room's total (from the committee's cards).
+// ghosts: how many ghost holes the room may use; perSide = that many on the front 9 AND on the back 9.
 var TEAMS=[
-  {id:'1707',p:['Rock','Opie','Gumby','Teo']},
-  {id:'905',p:['Fitz','Blanch','Scoobie','Doc']},
-  {id:'906',p:['Moses','Jimmy C','Angelo','Chub-Rock']},
-  {id:'205',p:['Nater','Nooner','Flyin Pat','Ace']},
-  {id:'505',p:['Fairway Ninja','Kripla','Welks','Kipper']},
-  {id:'1605',p:['PT','Zen','Billy','Smitty']}
+  {id:'1707',p:['Rock','Opie','Gumby','Teo'],strokes:1.5,ghosts:3,perSide:false},
+  {id:'905',p:['Fitz','Blanch','Scoobie','Doc'],strokes:1.5,ghosts:3,perSide:false},
+  {id:'906',p:['Moses','Jimmy C','Angelo'],strokes:0,ghosts:1,perSide:true,note:'Threesome (Chub-Rock is out): one player hits an extra ball every shot.'},
+  {id:'205',p:['Nater','Nooner','Flyin Pat','Ace'],strokes:0,ghosts:1,perSide:true},
+  {id:'505',p:['Fairway Ninja','Kripla','Welks','Kipper'],strokes:3,ghosts:4,perSide:false},
+  {id:'1605',p:['PT','Zen','Billy'],strokes:0,ghosts:1,perSide:true,note:'Threesome (Smitty is out): one player hits an extra ball every shot.'}
 ];
 /* ============================================= */
 var POLL_MS=10000;
@@ -147,12 +149,14 @@ function store(){return {get:function(k){try{return localStorage.getItem(k);}cat
 var ls=store();
 function readJSON(k,d){try{var v=JSON.parse(ls.get(k)||'null');return v==null?d:v;}catch(e){return d;}}
 
-function emptyState(){var s={scores:{},drives:{},bonus:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.drives[t.id]={};s.bonus[t.id]={ticks:[],ghosts:[]};});return s;}
-function holes(a){var o=[];(Array.isArray(a)?a:[]).forEach(function(x){x=+x;if(x>=1&&x<=18&&o.indexOf(x)<0)o.push(x);});return o.sort(function(p,q){return p-q;});}
+function emptyState(){var s={scores:{},drives:{},ghost:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.drives[t.id]={};s.ghost[t.id]={};});return s;}
+// The Sheet's Drive column holds "Rock", or "Rock|ghost" when the room used a ghost hole there.
+function packDrive(p,g){return p+(g?'|ghost':'');}
+function setDrive(s,room,h,raw){var parts=String(raw||'').split('|');delete s.drives[room][h];delete s.ghost[room][h];
+  if(parts[0])s.drives[room][h]=parts[0];if(parts[1]==='ghost')s.ghost[room][h]=true;}
 function normalize(s){var o=emptyState();if(!s)return o;
   TEAMS.forEach(function(t){var sc=(s.scores&&s.scores[t.id])||{};for(var h in sc){var n=+h,v=+sc[h];if(n>=1&&n<=18&&v>=1)o.scores[t.id][n]=v;}
-    var dv=(s.drives&&s.drives[t.id])||{};for(var k in dv){if(o.scores[t.id][+k]!=null&&dv[k])o.drives[t.id][+k]=String(dv[k]);}
-    var b=(s.bonus&&s.bonus[t.id])||{};o.bonus[t.id]={ticks:holes(b.ticks),ghosts:holes(b.ghosts)};});
+    var dv=(s.drives&&s.drives[t.id])||{};for(var k in dv){if(o.scores[t.id][+k]!=null&&dv[k])setDrive(o,t.id,+k,dv[k]);}});
   o.updated=s.updated||null;return o;}
 
 var server=normalize(readJSON(KEY+'-cache',null));   // last copy from the Sheet
@@ -164,16 +168,25 @@ var state=server;
 function applyQueue(){
   var s=JSON.parse(JSON.stringify(server));
   queue.forEach(function(op){
-    if(!s.scores[op.room]&&op.action!=='bonus')return;
-    if(op.action==='score'){s.scores[op.room][op.hole]=op.strokes;if(op.drive)s.drives[op.room][op.hole]=op.drive;else delete s.drives[op.room][op.hole];}
-    else if(op.action==='clear'){delete s.scores[op.room][op.hole];delete s.drives[op.room][op.hole];}
-    else if(op.action==='bonus')TEAMS.forEach(function(t){var b=op.bonus[t.id]||{};s.bonus[t.id]={ticks:holes(b.ticks),ghosts:holes(b.ghosts)};});
+    if(!s.scores[op.room])return;
+    if(op.action==='score'){s.scores[op.room][op.hole]=op.strokes;setDrive(s,op.room,op.hole,op.drive);}
+    else if(op.action==='clear'){delete s.scores[op.room][op.hole];setDrive(s,op.room,op.hole,'');}
   });
   state=s;
 }
 applyQueue();
-function anyTicks(){return TEAMS.some(function(t){return state.bonus[t.id].ticks.length>0;});}
 function team(id){return TEAMS.filter(function(t){return t.id===id;})[0];}
+/* Ghost holes: each room has its own allowance (from the committee's cards). */
+function ghostInfo(t){
+  var g=state.ghost[t.id],used=[],front=0,back=0;
+  for(var h=1;h<=18;h++)if(g[h]){used.push(h);if(h<=9)front++;else back++;}
+  return {used:used,front:front,back:back};
+}
+function ghostRule(t){return t.perSide?t.ghosts+' on the front 9 and '+t.ghosts+' on the back 9':t.ghosts+' any time';}
+function ghostLeft(t,h){var x=ghostInfo(t);if(t.perSide)return t.ghosts-(h<=9?x.front:x.back);return t.ghosts-x.used.length;}
+function ghostText(t){var x=ghostInfo(t);
+  if(t.perSide)return 'Front '+(x.front>=t.ghosts?'used (#'+x.used.filter(function(h){return h<=9;}).join(', #')+')':'available')+' · Back '+(x.back>=t.ghosts?'used (#'+x.used.filter(function(h){return h>9;}).join(', #')+')':'available');
+  return x.used.length+' of '+t.ghosts+' used'+(x.used.length?' (#'+x.used.join(', #')+')':'');}
 /* Drives: every player's tee shot must be used at least 2 times over 18 holes. */
 function driveInfo(t){
   var d=state.drives[t.id],s=state.scores[t.id],count={},played=0;
@@ -190,19 +203,19 @@ function needLine(t){
 
 var keeper=ls.get(KEY+'-keeper')==='1';
 var savedTeam=ls.get(KEY+'-team');
-var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null,draft:null,pin:ls.get(KEY+'-pin')||''};
+var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null};
 
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function rel(n){return n===0?'E':n>0?'+'+n:'−'+Math.abs(n);}
+function num(n){var a=Math.abs(n),w=Math.floor(a+1e-9),f=a-w>0.25;return (w===0&&f?'':String(w))+(f?'½':'');}
+function rel(n){return Math.abs(n)<1e-9?'E':n>0?'+'+num(n):'−'+num(n);}
 function clock(iso){if(!iso)return '';try{return new Date(iso).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});}catch(e){return '';}}
 function nextHole(id){var s=state.scores[id];for(var h=1;h<=18;h++)if(s[h]==null)return h;return 18;}
 
 function stat(t){var s=state.scores[t.id],n=0,gross=0,par=0,last=0;
   for(var h=1;h<=18;h++){if(s[h]==null)continue;n++;gross+=s[h];par+=PAR[h-1];last=h;}
-  // A tick only counts once the room has played that hole, so the board stays fair mid-round.
-  var tk=state.bonus[t.id].ticks,ticks=tk.filter(function(h){return s[h]!=null;}).length;
-  return {t:t,n:n,gross:gross,toPar:gross-par,ticks:ticks,tickTotal:tk.length,net:gross-par-ticks,last:last};}
+  // Net = to par minus the room's strokes (the full allowance, the way the card is scored).
+  return {t:t,n:n,gross:gross,toPar:gross-par,net:gross-par-(t.strokes||0),last:last};}
 function countback(a,b){
   var sa=state.scores[a.t.id],sb=state.scores[b.t.id];
   for(var i=0;i<HARD.length;i++){var h=HARD[i];if(sa[h]==null||sb[h]==null)continue;if(sa[h]!==sb[h])return sa[h]-sb[h];}
@@ -233,35 +246,35 @@ function boardHtml(rows){
     var thru=!r.n?'Not started':r.n===18?'Final':'Thru '+r.last;
     return '<div class="lr'+(p&&p<=3?' p'+p:'')+'"><span class="pos">'+label+'</span><span class="nm"><b>Room '+r.t.id+'</b><span>'+r.t.p.map(esc).join(' · ')+'</span></span><span class="th">'+thru+'</span><span class="sc">'+(r.n?rel(r.net):'–')+'</span></div>';
   }).join('');
-  var note=started?('Score is to par'+(anyTicks()?', after ticks':'')+'. Top 3 rooms win a pot.'):'Par 72 · Top 3 rooms win a pot';
+  var note=started?'Score is to par, minus each room’s strokes. Top 3 rooms win a pot.':'Par 72 · Top 3 rooms win a pot';
   return '<header class="board"><div class="logo" role="img" aria-label="Tomahawk Open 2026: Fairways, Friends, Filets"></div><div class="eyebrow">'+esc(EVENT_LINE)+'</div>'+
     '<h1>Roommates Scramble</h1><div class="lb">'+lb+'</div>'+
     '<p class="sub">'+note+'</p><p class="sub">'+liveLine()+'</p></header>';
 }
 
 function teamHtml(r){
-  var s=state.scores[r.t.id],b=state.bonus[r.t.id],cells='';
-  for(var h=1;h<=18;h++){var v=s[h];
-    var mk=(b.ticks.indexOf(h)>=0?'T':'')+(b.ghosts.indexOf(h)>=0?'G':'');var num=h+(mk?'<sup>'+mk+'</sup>':'');
-    if(v==null){cells+='<div class="hc e">'+num+'<b>&nbsp;</b></div>';continue;}
-    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+num+'<b>'+v+'</b></div>';}
+  var s=state.scores[r.t.id],g=state.ghost[r.t.id],cells='';
+  for(var h=1;h<=18;h++){var v=s[h];var lab=h+(g[h]?'<sup>G</sup>':'');
+    if(v==null){cells+='<div class="hc e">'+lab+'<b>&nbsp;</b></div>';continue;}
+    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+lab+'<b>'+v+'</b></div>';}
   var pot=(typeof r.pos==='number'&&r.pos<=3&&r.n)?'<span class="pot">Pot '+r.pos+'</span>':'';
-  var tk=r.tickTotal>0?'<span>Ticks <b>'+r.ticks+' of '+r.tickTotal+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
+  var st=r.t.strokes?'<span>Their strokes <b>'+num(r.t.strokes)+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
   var di=driveInfo(r.t);
   var drv='<div class="drv"><span>Drives:</span>'+r.t.p.map(function(p){return '<span'+(di.count[p]<2?' class="short"':'')+'>'+esc(p)+' <b>'+di.count[p]+'</b></span>';}).join('')+'</div>';
-  var legend=(b.ticks.length||b.ghosts.length)?'<p class="legend">'+(b.ticks.length?'T = tick hole (1 stroke off)':'')+(b.ticks.length&&b.ghosts.length?' · ':'')+(b.ghosts.length?'G = ghost hole':'')+'</p>':'';
+  var gh='<div class="drv"><span>Ghost holes ('+ghostRule(r.t)+'):</span><span><b>'+ghostText(r.t)+'</b></span></div>';
   return '<article class="team"><div class="ttop"><span class="tn">Room '+r.t.id+pot+'</span><span class="pl">'+r.t.p.map(esc).join(', ')+'</span></div>'+
-    '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.last||0)+'</b></span><span>Strokes <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+tk+'</div>'+
-    '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div>'+legend+drv+needLine(r.t)+'</article>';
+    (r.t.note?'<p class="legend">'+esc(r.t.note)+'</p>':'')+
+    '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.last||0)+'</b></span><span>Score <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+st+'</div>'+
+    '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div>'+drv+gh+needLine(r.t)+'</article>';
 }
 
 function rulesHtml(){
   return '<section class="rules"><h2>Today’s rules</h2>'+
-    '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green.</p>'+
+    '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green. Rooms 906 and 1605 are threesomes today: one player hits an extra ball every shot.</p>'+
     '<p>At least 2 tee shots from every player over 18 holes. No breakfast balls off #1. Each room’s card counts whose drive was used.</p>'+
-    '<p>Ticks: certain rooms get a stroke off on certain holes (marked T on their card). It comes off once that hole is played.</p>'+
+    '<p>Strokes (from the committee): Rooms 1707 and 905 get 1½, Room 505 gets 3, the rest get 0. They come off the room’s total.</p>'+
     '<p>No 3-putts: miss the first putt and the second is a gimme. Max 2 putts a hole.</p>'+
-    '<p>Ghost holes (marked G on a room’s card): once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out.</p>'+
+    '<p>Ghost holes: once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out. Rooms 906, 205 and 1605 get 1 per side; 1707 and 905 get 3 any time; 505 gets 4 any time. Holes where a room used one show a G.</p>'+
     '<p>Ties: 4-hole putt-off if there’s daylight, otherwise best score on the hardest hole on the card (#3, then #13, #6 and so on).</p></section>';
 }
 
@@ -271,35 +284,26 @@ function keeperHtml(){
   var h=ui.hole,ex=s[h];
   if(ui.v==null)ui.v=ex!=null?ex:PAR[h-1];
   if(ui.drive===undefined)ui.drive=state.drives[id][h]||null;
+  if(ui.ghost===undefined)ui.ghost=!!state.ghost[id][h];
   var team=TEAMS.filter(function(t){return t.id===id;})[0];
-  var di=driveInfo(team),bn=state.bonus[id];
+  var di=driveInfo(team);
   var drives='<div><span class="lab">Whose drive did you use?</span><div class="drives">'+team.p.map(function(p){
     return '<button class="drive" data-act="drive" data-p="'+esc(p)+'" aria-pressed="'+(ui.drive===p)+'">'+esc(p)+'<small>'+di.count[p]+' used</small></button>';}).join('')+'</div></div>';
-  var notes=(bn.ticks.indexOf(h)>=0?'<div class="bonusnote">Tick hole for Room '+id+': 1 stroke comes off.</div>':'')+
-    (bn.ghosts.indexOf(h)>=0?'<div class="bonusnote">Ghost hole for Room '+id+': you can putt at the old plugged cup.</div>':'');
+  var left=ghostLeft(team,h)+(state.ghost[id][h]?1:0);   // a hole that already used one can keep it
+  var notes='<div><span class="lab">Ghost hole ('+ghostRule(team)+')</span><div class="drives">'+
+    '<button class="drive" data-act="ghost-no" aria-pressed="'+(!ui.ghost)+'">Not used</button>'+
+    '<button class="drive" data-act="ghost-yes" aria-pressed="'+ui.ghost+'">Used one here<small>'+Math.max(0,left)+' left'+(team.perSide?(h<=9?' on the front':' on the back'):'')+'</small></button></div></div>';
   var picks=TEAMS.map(function(t){return '<button class="pick" data-act="pick" data-t="'+t.id+'" aria-pressed="'+(t.id===id)+'">'+t.id+'</button>';}).join('');
   var opts='';for(var x=1;x<=18;x++){opts+='<option value="'+x+'"'+(x===h?' selected':'')+'>Hole '+x+' · Par '+PAR[x-1]+(s[x]!=null?' · saved '+s[x]:'')+'</option>';}
   var d=ui.v-PAR[h-1],word=d<=-3?'Albatross':d===-2?'Eagle':d===-1?'Birdie':d===0?'Par':d===1?'Bogey':d===2?'Double bogey':rel(d);
   var msg=ui.msg?'<div class="msg'+(ui.msg.k==='ok'?' ok':'')+'" role="status">'+esc(ui.msg.t)+'</div>':'';
-  var setup='';
-  if(ui.draft){
-    var br=ui.bRoom,bd=ui.draft[br];
-    var grid=function(kind){var o='';for(var x=1;x<=18;x++)o+='<button class="hb" data-act="b'+kind+'" data-h="'+x+'" aria-pressed="'+(bd[kind].indexOf(x)>=0)+'" aria-label="Hole '+x+'">'+x+'</button>';return '<div class="hgrid">'+o+'</div>';};
-    setup='<div class="setup"><p class="note">For the Competition Committee (Bonus #2). Pick a room, tap its tick holes and ghost holes, then save. Do each room that gets them, then Save once.</p>'+
-      '<div class="picks">'+TEAMS.map(function(t){var c=ui.draft[t.id].ticks.length+ui.draft[t.id].ghosts.length;return '<button class="pick" data-act="broom" data-t="'+t.id+'" aria-pressed="'+(t.id===br)+'">'+t.id+(c?' •':'')+'</button>';}).join('')+'</div>'+
-      '<div><span class="lab">Room '+br+' tick holes (1 stroke off each)</span>'+grid('ticks')+'</div>'+
-      '<div><span class="lab">Room '+br+' ghost holes</span>'+grid('ghosts')+'</div>'+
-      '<div><label class="lab" for="pin">Committee PIN</label><input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" value="'+esc(ui.pin)+'"></div>'+
-      '<button class="save" data-act="save-bonus">Save ticks and ghost holes</button></div>';
-  }
   return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
     '<div><span class="lab">Room</span><div class="picks">'+picks+'</div><p class="note">'+team.p.map(esc).join(', ')+'</p></div>'+
-    '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+notes+
+    '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+
     '<div class="step"><div class="row"><button class="sb" data-act="v-" aria-label="Score down">−</button><span class="v">'+ui.v+'</span><button class="sb" data-act="v+" aria-label="Score up">+</button></div><span class="rel">'+word+'</span></div>'+
-    drives+needLine(team)+
+    drives+needLine(team)+notes+
     '<button class="save" data-act="save-hole">'+(ex!=null?'Update hole '+h:'Save hole '+h)+'</button>'+
-    (ex!=null?'<button class="ghost" data-act="clear-hole">Remove hole '+h+' score</button>':'')+
-    '<details'+(ui.draft?' open':'')+'><summary data-act="setup-toggle">Ticks and ghost holes (committee)</summary>'+setup+'</details></section>';
+    (ex!=null?'<button class="ghost" data-act="clear-hole">Remove hole '+h+' score</button>':'')+'</section>';
 }
 
 function render(){
@@ -330,7 +334,7 @@ function flush(){
   if(!configured||net.flushing||!queue.length)return;
   net.flushing=true;
   var op=queue[0];
-  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive,ticks:op.ticks,bonus:op.bonus,pin:op.pin};
+  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive};
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(res){
@@ -342,10 +346,7 @@ function flush(){
       }else{
         // The Sheet rejected it; drop it so it doesn't block the rest.
         queue.shift();saveQueue();applyQueue();
-        var err=res&&res.error;
-        if(err==='bad_pin'){ui.pin='';ls.set(KEY+'-pin','');ui.msg={k:'warn',t:'Wrong committee PIN, so the ticks and ghost holes were not saved. Enter the PIN and save again.'};}
-        else if(err==='no_pin')ui.msg={k:'warn',t:'The committee PIN isn’t set up in the Sheet yet, so ticks and ghost holes can’t be saved.'};
-        else ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
+        ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
       }
       render();
       if(queue.length)flush();
@@ -359,40 +360,37 @@ function flush(){
 function enqueue(op,okText){
   // A newer save for the same hole replaces an unsent older one.
   if(op.action==='score'||op.action==='clear')queue=queue.filter(function(q){return !((q.action==='score'||q.action==='clear')&&q.room===op.room&&q.hole===op.hole&&q!==queue[0]);});
-  if(op.action==='bonus')queue=queue.filter(function(q,i){return q.action!=='bonus'||i===0;});
   queue.push(op);saveQueue();applyQueue();
   ui.msg={k:'ok',t:okText};
-  ui.hole=null;ui.v=null;ui.drive=undefined;ui.draft=null;
+  ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;
   render();flush();
 }
 
 root.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;var a=el.getAttribute('data-act');
   if(a==='hole')return;
-  if(a==='setup-toggle'){e.preventDefault();ui.draft=ui.draft?null:clone(state.bonus);ui.bRoom=ui.team;render();return;}
-  if(a==='broom'){ui.bRoom=el.getAttribute('data-t');render();return;}
-  if(a==='bticks'||a==='bghosts'){var kind=a.slice(1),hh=+el.getAttribute('data-h'),arr=ui.draft[ui.bRoom][kind],ix=arr.indexOf(hh);if(ix>=0)arr.splice(ix,1);else{arr.push(hh);arr.sort(function(p,q){return p-q;});}render();return;}
   if(a==='drive'){ui.drive=el.getAttribute('data-p');render();return;}
+  if(a==='ghost-no'){ui.ghost=false;render();return;}
+  if(a==='ghost-yes'){
+    var gt=team(ui.team),had=!!state.ghost[ui.team][ui.hole];
+    if(!had&&ghostLeft(gt,ui.hole)<=0){ui.msg={k:'warn',t:'Room '+ui.team+' has no ghost holes left'+(gt.perSide?(ui.hole<=9?' on the front 9':' on the back 9'):'')+' ('+ghostRule(gt)+').'};render();return;}
+    ui.ghost=true;render();return;}
   if(a==='keeper-on'){keeper=true;ls.set(KEY+'-keeper','1');render();var k=document.getElementById('keeper');if(k&&k.scrollIntoView)k.scrollIntoView({behavior:'smooth',block:'start'});return;}
   if(a==='keeper-off'){keeper=false;ls.set(KEY+'-keeper','0');render();return;}
-  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.drive=undefined;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
+  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
   if(a==='v-'){ui.v=Math.max(1,ui.v-1);render();return;}
   if(a==='v+'){ui.v=Math.min(15,ui.v+1);render();return;}
   if(!configured){ui.msg={k:'warn',t:'Saving isn’t set up yet.'};render();return;}
   if(a==='save-hole'){
     if(!ui.drive){ui.msg={k:'warn',t:'Tap whose drive you used, then save.'};render();return;}
-    var h=ui.hole,v=ui.v,dr=ui.drive;enqueue({action:'score',room:ui.team,hole:h,strokes:v,drive:dr},'Hole '+h+' saved ('+v+', '+dr+'’s drive).');return;}
+    var h=ui.hole,v=ui.v,dr=ui.drive,gh=!!ui.ghost;
+    enqueue({action:'score',room:ui.team,hole:h,strokes:v,drive:packDrive(dr,gh)},'Hole '+h+' saved ('+v+', '+dr+'’s drive'+(gh?', ghost hole':'')+').');return;}
   if(a==='clear-hole'){var h2=ui.hole;enqueue({action:'clear',room:ui.team,hole:h2},'Hole '+h2+' removed.');return;}
-  if(a==='save-bonus'){
-    if(!ui.pin){ui.msg={k:'warn',t:'Enter the committee PIN, then save.'};render();var pe=document.getElementById('pin');if(pe)pe.focus();return;}
-    ls.set(KEY+'-pin',ui.pin);
-    enqueue({action:'bonus',bonus:clone(ui.draft),pin:ui.pin},'Ticks and ghost holes sent.');return;}
 });
 root.addEventListener('change',function(e){
   var el=e.target;
-  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;ui.drive=undefined;render();}
+  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;ui.drive=undefined;ui.ghost=undefined;render();}
 });
-root.addEventListener('input',function(e){if(e.target.id==='pin')ui.pin=e.target.value.trim();});
 
 render();
 if(configured){

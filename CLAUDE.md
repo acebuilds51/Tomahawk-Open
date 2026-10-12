@@ -54,13 +54,21 @@ Google Apps Script web app (Code.gs)  →  Google Sheet tabs "Scores" and "Ticks
   retrying · N saves waiting for signal".
 
 ### Scoring rules (match the printed rules on the page)
-- Each room's score = strokes − par over the holes played, minus **ticks** on the holes it has
-  played (a tick is 1 stroke off on a committee-chosen hole; it only counts once that hole is
-  played so the board is fair mid-round). Lower is better.
-- **Ticks and ghost holes** are per room, per hole (Day 2 sheet, Bonus #2). The committee sets
-  them in the scorekeeper tools ("Ticks and ghost holes"); they're stored in the `Bonus` tab as
-  comma lists ("1,5"). Cards mark them T / G; the scorekeeper sees a note on those holes.
-  Ghost holes don't change the math; they're just shown.
+- Each room's score = strokes − par over the holes played, minus that room's **strokes**
+  allowance (`strokes` in `TEAMS`, can be 1.5; the full amount comes off, like the paper card).
+  Lower is better. Halves display as "½".
+- **Ghost holes** are an allowance per room, set in `TEAMS`: `ghosts` = how many, `perSide` =
+  that many on the front 9 and that many on the back 9 (otherwise any time). The scorekeeper taps
+  "Used one here" when saving a hole; the page blocks going over the allowance. A used ghost hole
+  is stored in the Scores tab's Drive column as `Name|ghost` (no backend change was needed).
+  Cards show a G on those holes and "Front used (#1) · Back available" or "1 of 3 used".
+- Threesomes: a room's `p` list can have 3 players; `note` shows on its card. The 2-drives rule
+  still applies to each player listed.
+- 2026-10-12 values came from the committee's cards: 1707 and 905 = 1.5 strokes, 3 ghost holes
+  any time; 505 = 3 strokes, 4 any time; 906, 205, 1605 = 0 strokes, 1 per side. 906 and 1605
+  played as threesomes (Chub-Rock and Smitty out) with an extra ball each shot (no score change).
+- The older committee panel (per-hole ticks and ghost holes in the `Bonus` tab, PIN-protected)
+  was removed from the page that morning; the backend still supports the `bonus` action.
 - **Drives**: every save must say whose tee shot was used (Scores column E, `Drive`). Each card
   counts drives per player (rule: at least 2 each) and warns once a room is close to running
   out of holes to get everyone to 2.
