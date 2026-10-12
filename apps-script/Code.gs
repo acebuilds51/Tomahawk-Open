@@ -14,8 +14,9 @@
  */
 
 var ROOMS = ['1707', '905', '906', '205', '505', '1605'];
-var SCORES = 'Scores';
-var TICKS = 'Ticks';
+var SCORES = 'Scores';   // Room, Hole, Strokes, Saved at, Drive (whose tee shot the room used)
+var TICKS = 'Ticks';     // old per-room tick totals; kept so older phones don't break
+var BONUS = 'Bonus';     // Room, Tick holes, Ghost holes (comma lists like "3,7")
 
 var RC_MATCHES = 'RC Matches';
 var RC_SCORES = 'RC Scores';
@@ -41,6 +42,13 @@ function setup() {
   }
   s.getRange('A:A').setNumberFormat('@');
   t.getRange('A:A').setNumberFormat('@');
+  if (s.getRange(1, 5).getValue() === '') s.getRange(1, 5).setValue('Drive');
+  var b = ss.getSheetByName(BONUS) || ss.insertSheet(BONUS);
+  b.getRange('A:C').setNumberFormat('@');   // keep "3,7" as text so Sheets doesn't turn it into 37
+  if (b.getLastRow() === 0) {
+    b.appendRow(['Room', 'Tick holes', 'Ghost holes']);
+    ROOMS.forEach(function (r) { b.appendRow([r, '', '']); });
+  }
 
   var m = ss.getSheetByName(RC_MATCHES) || ss.insertSheet(RC_MATCHES);
   if (m.getLastRow() === 0) {
@@ -57,13 +65,24 @@ function resetRyderCup() {
   if (rs && rs.getLastRow() > 1) rs.deleteRows(2, rs.getLastRow() - 1);
 }
 
-/** Clears every score and tick. Run by hand from the editor before a new round. */
+/** Clears every score, drive, tick and ghost hole. Run by hand from the editor before a new round. */
 function resetRound() {
   var ss = SpreadsheetApp.getActive();
   var s = ss.getSheetByName(SCORES);
-  if (s && s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow() - 1, 4).clearContent();
+  if (s && s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow() - 1, 5).clearContent();
   var t = ss.getSheetByName(TICKS);
   if (t && t.getLastRow() > 1) t.getRange(2, 2, t.getLastRow() - 1, 1).setValue(0);
+  var b = ss.getSheetByName(BONUS);
+  if (b && b.getLastRow() > 1) b.getRange(2, 2, b.getLastRow() - 1, 2).setValue('');
+}
+
+function holeList_(v) {
+  var seen = {};
+  String(v == null ? '' : v).split(/[^0-9]+/).forEach(function (x) {
+    var n = Number(x);
+    if (x !== '' && n >= 1 && n <= 18) seen[n] = true;
+  });
+  return Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
 }
 
 function doGet(e) {
@@ -93,12 +112,25 @@ function doPost(e) {
         if (String(rows[i][0]) === room && Number(rows[i][1]) === hole) { at = i + 2; break; }
       }
       if (body.action === 'score') {
-        var row = [room, hole, strokes, new Date()];
-        if (at > 0) s.getRange(at, 1, 1, 4).setValues([row]);
+        var row = [room, hole, strokes, new Date(), String(body.drive == null ? '' : body.drive).slice(0, 40)];
+        if (at > 0) s.getRange(at, 1, 1, 5).setValues([row]);
         else s.appendRow(row);
       } else if (at > 0) {
         s.deleteRow(at);
       }
+    } else if (body.action === 'bonus') {
+      var b = ss.getSheetByName(BONUS);
+      if (!b) return json_({ ok: false, error: 'not_set_up' });
+      var bonus = body.bonus || {};
+      var brows = b.getLastRow() > 1 ? b.getRange(2, 1, b.getLastRow() - 1, 1).getValues() : [];
+      ROOMS.forEach(function (r) {
+        var d = bonus[r] || {};
+        var vals = [holeList_((d.ticks || []).join(',')).join(','), holeList_((d.ghosts || []).join(',')).join(',')];
+        var idx = -1;
+        for (var j = 0; j < brows.length; j++) if (String(brows[j][0]) === r) { idx = j + 2; break; }
+        if (idx > 0) b.getRange(idx, 2, 1, 2).setValues([vals]);
+        else b.appendRow([r, vals[0], vals[1]]);
+      });
     } else if (body.action === 'ticks') {
       var t = ss.getSheetByName(TICKS);
       var data = body.ticks || {};
@@ -124,14 +156,15 @@ function doPost(e) {
 
 function readState_() {
   var ss = SpreadsheetApp.getActive();
-  var out = { scores: {}, ticks: {}, updated: null };
-  ROOMS.forEach(function (r) { out.scores[r] = {}; out.ticks[r] = 0; });
+  var out = { scores: {}, drives: {}, ticks: {}, bonus: {}, updated: null };
+  ROOMS.forEach(function (r) { out.scores[r] = {}; out.drives[r] = {}; out.ticks[r] = 0; out.bonus[r] = { ticks: [], ghosts: [] }; });
   var s = ss.getSheetByName(SCORES);
   if (s && s.getLastRow() > 1) {
-    s.getRange(2, 1, s.getLastRow() - 1, 4).getValues().forEach(function (r) {
+    s.getRange(2, 1, s.getLastRow() - 1, 5).getValues().forEach(function (r) {
       var room = String(r[0]), hole = Number(r[1]), v = Number(r[2]);
       if (!out.scores[room] || !(hole >= 1 && hole <= 18) || !v) return;
       out.scores[room][hole] = v;
+      if (r[4] !== '' && r[4] != null) out.drives[room][hole] = String(r[4]);
       var when = r[3] instanceof Date ? r[3].toISOString() : null;
       if (when && (!out.updated || when > out.updated)) out.updated = when;
     });
@@ -140,6 +173,13 @@ function readState_() {
   if (t && t.getLastRow() > 1) {
     t.getRange(2, 1, t.getLastRow() - 1, 2).getValues().forEach(function (r) {
       if (out.ticks.hasOwnProperty(String(r[0]))) out.ticks[String(r[0])] = Number(r[1]) || 0;
+    });
+  }
+  var b = ss.getSheetByName(BONUS);
+  if (b && b.getLastRow() > 1) {
+    b.getRange(2, 1, b.getLastRow() - 1, 3).getValues().forEach(function (r) {
+      var room = String(r[0]);
+      if (out.bonus[room]) out.bonus[room] = { ticks: holeList_(r[1]), ghosts: holeList_(r[2]) };
     });
   }
   return out;

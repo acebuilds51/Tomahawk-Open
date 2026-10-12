@@ -99,6 +99,23 @@ summary{cursor:pointer;font-weight:600}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
 .dot.off{background:var(--warn)}
 .banner{padding:12px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:15px}
+.wrap,.keeper,.setup{grid-template-columns:minmax(0,1fr)}
+.keeper>*,.setup>*{min-width:0}
+.hc sup{font-size:9px;font-weight:700;color:var(--gold-ink);margin-left:1px;line-height:0}
+.legend{font-size:12px;color:var(--muted);margin:0}
+.drv{font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+.drv b{color:var(--ink);font-variant-numeric:tabular-nums}
+.drv .short,.drv .short b{color:var(--warn)}
+.need{font-size:13px;padding:6px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn)}
+.drives{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.drive{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 6px;font-weight:600;font-size:16px;overflow-wrap:anywhere}
+.drive[aria-pressed="true"]{background:var(--board);color:var(--board-ink);border-color:var(--board)}
+.drive small{display:block;font-weight:400;font-size:12px;opacity:.8}
+.bonusnote{font-size:14px;padding:8px 12px;border-radius:8px;background:var(--gold-soft);color:var(--gold-ink)}
+.hgrid{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px}
+.hb{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 0;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.hb[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--on-gold)}
+:root{--on-gold:#231618}
 </style>
 </head>
 <body>
@@ -129,10 +146,12 @@ function store(){return {get:function(k){try{return localStorage.getItem(k);}cat
 var ls=store();
 function readJSON(k,d){try{var v=JSON.parse(ls.get(k)||'null');return v==null?d:v;}catch(e){return d;}}
 
-function emptyState(){var s={scores:{},ticks:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.ticks[t.id]=0;});return s;}
+function emptyState(){var s={scores:{},drives:{},bonus:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.drives[t.id]={};s.bonus[t.id]={ticks:[],ghosts:[]};});return s;}
+function holes(a){var o=[];(Array.isArray(a)?a:[]).forEach(function(x){x=+x;if(x>=1&&x<=18&&o.indexOf(x)<0)o.push(x);});return o.sort(function(p,q){return p-q;});}
 function normalize(s){var o=emptyState();if(!s)return o;
   TEAMS.forEach(function(t){var sc=(s.scores&&s.scores[t.id])||{};for(var h in sc){var n=+h,v=+sc[h];if(n>=1&&n<=18&&v>=1)o.scores[t.id][n]=v;}
-    o.ticks[t.id]=Math.max(0,+((s.ticks||{})[t.id])||0);});
+    var dv=(s.drives&&s.drives[t.id])||{};for(var k in dv){if(o.scores[t.id][+k]!=null&&dv[k])o.drives[t.id][+k]=String(dv[k]);}
+    var b=(s.bonus&&s.bonus[t.id])||{};o.bonus[t.id]={ticks:holes(b.ticks),ghosts:holes(b.ghosts)};});
   o.updated=s.updated||null;return o;}
 
 var server=normalize(readJSON(KEY+'-cache',null));   // last copy from the Sheet
@@ -144,14 +163,29 @@ var state=server;
 function applyQueue(){
   var s=JSON.parse(JSON.stringify(server));
   queue.forEach(function(op){
-    if(op.action==='score')s.scores[op.room][op.hole]=op.strokes;
-    else if(op.action==='clear')delete s.scores[op.room][op.hole];
-    else if(op.action==='ticks')TEAMS.forEach(function(t){s.ticks[t.id]=op.ticks[t.id]||0;});
+    if(!s.scores[op.room]&&op.action!=='bonus')return;
+    if(op.action==='score'){s.scores[op.room][op.hole]=op.strokes;if(op.drive)s.drives[op.room][op.hole]=op.drive;else delete s.drives[op.room][op.hole];}
+    else if(op.action==='clear'){delete s.scores[op.room][op.hole];delete s.drives[op.room][op.hole];}
+    else if(op.action==='bonus')TEAMS.forEach(function(t){var b=op.bonus[t.id]||{};s.bonus[t.id]={ticks:holes(b.ticks),ghosts:holes(b.ghosts)};});
   });
   state=s;
 }
 applyQueue();
-function anyTicks(){return TEAMS.some(function(t){return state.ticks[t.id]>0;});}
+function anyTicks(){return TEAMS.some(function(t){return state.bonus[t.id].ticks.length>0;});}
+function team(id){return TEAMS.filter(function(t){return t.id===id;})[0];}
+/* Drives: every player's tee shot must be used at least 2 times over 18 holes. */
+function driveInfo(t){
+  var d=state.drives[t.id],s=state.scores[t.id],count={},played=0;
+  t.p.forEach(function(p){count[p]=0;});
+  for(var h=1;h<=18;h++){if(s[h]==null)continue;played++;if(d[h]&&count.hasOwnProperty(d[h]))count[d[h]]++;}
+  var need=0,short=[];t.p.forEach(function(p){var n=Math.max(0,2-count[p]);need+=n;if(n)short.push(p+(n>1?' ×'+n:''));});
+  return {count:count,need:need,short:short,left:18-played};
+}
+function needLine(t){
+  var x=driveInfo(t);if(!x.need||x.left>x.need+3)return '';
+  if(x.need>x.left)return '<div class="need">Not enough holes left for 2 drives each. Still short: '+x.short.map(esc).join(', ')+'</div>';
+  return '<div class="need">'+x.left+' holes left, still need: '+x.short.map(esc).join(', ')+'</div>';
+}
 
 var keeper=ls.get(KEY+'-keeper')==='1';
 var savedTeam=ls.get(KEY+'-team');
@@ -165,8 +199,9 @@ function nextHole(id){var s=state.scores[id];for(var h=1;h<=18;h++)if(s[h]==null
 
 function stat(t){var s=state.scores[t.id],n=0,gross=0,par=0,last=0;
   for(var h=1;h<=18;h++){if(s[h]==null)continue;n++;gross+=s[h];par+=PAR[h-1];last=h;}
-  var ticks=state.ticks[t.id]||0;
-  return {t:t,n:n,gross:gross,toPar:gross-par,ticks:ticks,net:gross-par-ticks,last:last};}
+  // A tick only counts once the room has played that hole, so the board stays fair mid-round.
+  var tk=state.bonus[t.id].ticks,ticks=tk.filter(function(h){return s[h]!=null;}).length;
+  return {t:t,n:n,gross:gross,toPar:gross-par,ticks:ticks,tickTotal:tk.length,net:gross-par-ticks,last:last};}
 function countback(a,b){
   var sa=state.scores[a.t.id],sb=state.scores[b.t.id];
   for(var i=0;i<HARD.length;i++){var h=HARD[i];if(sa[h]==null||sb[h]==null)continue;if(sa[h]!==sb[h])return sa[h]-sb[h];}
@@ -204,23 +239,28 @@ function boardHtml(rows){
 }
 
 function teamHtml(r){
-  var s=state.scores[r.t.id],cells='';
+  var s=state.scores[r.t.id],b=state.bonus[r.t.id],cells='';
   for(var h=1;h<=18;h++){var v=s[h];
-    if(v==null){cells+='<div class="hc e">'+h+'<b>&nbsp;</b></div>';continue;}
-    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+h+'<b>'+v+'</b></div>';}
+    var mk=(b.ticks.indexOf(h)>=0?'T':'')+(b.ghosts.indexOf(h)>=0?'G':'');var num=h+(mk?'<sup>'+mk+'</sup>':'');
+    if(v==null){cells+='<div class="hc e">'+num+'<b>&nbsp;</b></div>';continue;}
+    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+num+'<b>'+v+'</b></div>';}
   var pot=(typeof r.pos==='number'&&r.pos<=3&&r.n)?'<span class="pot">Pot '+r.pos+'</span>':'';
-  var tk=r.ticks>0?'<span>Ticks <b>'+r.ticks+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
+  var tk=r.tickTotal>0?'<span>Ticks <b>'+r.ticks+' of '+r.tickTotal+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
+  var di=driveInfo(r.t);
+  var drv='<div class="drv"><span>Drives:</span>'+r.t.p.map(function(p){return '<span'+(di.count[p]<2?' class="short"':'')+'>'+esc(p)+' <b>'+di.count[p]+'</b></span>';}).join('')+'</div>';
+  var legend=(b.ticks.length||b.ghosts.length)?'<p class="legend">'+(b.ticks.length?'T = tick hole (1 stroke off)':'')+(b.ticks.length&&b.ghosts.length?' · ':'')+(b.ghosts.length?'G = ghost hole':'')+'</p>':'';
   return '<article class="team"><div class="ttop"><span class="tn">Room '+r.t.id+pot+'</span><span class="pl">'+r.t.p.map(esc).join(', ')+'</span></div>'+
     '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.last||0)+'</b></span><span>Strokes <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+tk+'</div>'+
-    '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div></article>';
+    '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div>'+legend+drv+needLine(r.t)+'</article>';
 }
 
 function rulesHtml(){
   return '<section class="rules"><h2>Today’s rules</h2>'+
     '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green.</p>'+
-    '<p>At least 2 tee shots from every player over 18 holes. No breakfast balls off #1.</p>'+
+    '<p>At least 2 tee shots from every player over 18 holes. No breakfast balls off #1. Each room’s card counts whose drive was used.</p>'+
+    '<p>Ticks: certain rooms get a stroke off on certain holes (marked T on their card). It comes off once that hole is played.</p>'+
     '<p>No 3-putts: miss the first putt and the second is a gimme. Max 2 putts a hole.</p>'+
-    '<p>Ghost holes: once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out.</p>'+
+    '<p>Ghost holes (marked G on a room’s card): once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out.</p>'+
     '<p>Ties: 4-hole putt-off if there’s daylight, otherwise best score on the hardest hole on the card (#3, then #13, #6 and so on).</p></section>';
 }
 
@@ -229,24 +269,35 @@ function keeperHtml(){
   if(ui.hole==null)ui.hole=nextHole(id);
   var h=ui.hole,ex=s[h];
   if(ui.v==null)ui.v=ex!=null?ex:PAR[h-1];
+  if(ui.drive===undefined)ui.drive=state.drives[id][h]||null;
   var team=TEAMS.filter(function(t){return t.id===id;})[0];
+  var di=driveInfo(team),bn=state.bonus[id];
+  var drives='<div><span class="lab">Whose drive did you use?</span><div class="drives">'+team.p.map(function(p){
+    return '<button class="drive" data-act="drive" data-p="'+esc(p)+'" aria-pressed="'+(ui.drive===p)+'">'+esc(p)+'<small>'+di.count[p]+' used</small></button>';}).join('')+'</div></div>';
+  var notes=(bn.ticks.indexOf(h)>=0?'<div class="bonusnote">Tick hole for Room '+id+': 1 stroke comes off.</div>':'')+
+    (bn.ghosts.indexOf(h)>=0?'<div class="bonusnote">Ghost hole for Room '+id+': you can putt at the old plugged cup.</div>':'');
   var picks=TEAMS.map(function(t){return '<button class="pick" data-act="pick" data-t="'+t.id+'" aria-pressed="'+(t.id===id)+'">'+t.id+'</button>';}).join('');
   var opts='';for(var x=1;x<=18;x++){opts+='<option value="'+x+'"'+(x===h?' selected':'')+'>Hole '+x+' · Par '+PAR[x-1]+(s[x]!=null?' · saved '+s[x]:'')+'</option>';}
   var d=ui.v-PAR[h-1],word=d<=-3?'Albatross':d===-2?'Eagle':d===-1?'Birdie':d===0?'Par':d===1?'Bogey':d===2?'Double bogey':rel(d);
   var msg=ui.msg?'<div class="msg'+(ui.msg.k==='ok'?' ok':'')+'" role="status">'+esc(ui.msg.t)+'</div>':'';
   var setup='';
   if(ui.draft){
-    setup='<div class="setup"><p class="note">Only if the Competition Committee hands out ticks (Bonus #2). Each tick is one stroke off that room’s total. Leave everyone at 0 if there are none.</p>'+
-      TEAMS.map(function(t){return '<div class="tk"><span>Room '+t.id+'</span><div class="row"><button class="sb" data-act="tk-" data-t="'+t.id+'" aria-label="Fewer ticks for room '+t.id+'">−</button><span class="v">'+ui.draft[t.id]+'</span><button class="sb" data-act="tk+" data-t="'+t.id+'" aria-label="More ticks for room '+t.id+'">+</button></div></div>';}).join('')+
-      '<button class="save" data-act="save-ticks">Save ticks</button></div>';
+    var br=ui.bRoom,bd=ui.draft[br];
+    var grid=function(kind){var o='';for(var x=1;x<=18;x++)o+='<button class="hb" data-act="b'+kind+'" data-h="'+x+'" aria-pressed="'+(bd[kind].indexOf(x)>=0)+'" aria-label="Hole '+x+'">'+x+'</button>';return '<div class="hgrid">'+o+'</div>';};
+    setup='<div class="setup"><p class="note">For the Competition Committee (Bonus #2). Pick a room, tap its tick holes and ghost holes, then save. Do each room that gets them, then Save once.</p>'+
+      '<div class="picks">'+TEAMS.map(function(t){var c=ui.draft[t.id].ticks.length+ui.draft[t.id].ghosts.length;return '<button class="pick" data-act="broom" data-t="'+t.id+'" aria-pressed="'+(t.id===br)+'">'+t.id+(c?' •':'')+'</button>';}).join('')+'</div>'+
+      '<div><span class="lab">Room '+br+' tick holes (1 stroke off each)</span>'+grid('ticks')+'</div>'+
+      '<div><span class="lab">Room '+br+' ghost holes</span>'+grid('ghosts')+'</div>'+
+      '<button class="save" data-act="save-bonus">Save ticks and ghost holes</button></div>';
   }
   return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
     '<div><span class="lab">Room</span><div class="picks">'+picks+'</div><p class="note">'+team.p.map(esc).join(', ')+'</p></div>'+
-    '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+
+    '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+notes+
     '<div class="step"><div class="row"><button class="sb" data-act="v-" aria-label="Score down">−</button><span class="v">'+ui.v+'</span><button class="sb" data-act="v+" aria-label="Score up">+</button></div><span class="rel">'+word+'</span></div>'+
+    drives+needLine(team)+
     '<button class="save" data-act="save-hole">'+(ex!=null?'Update hole '+h:'Save hole '+h)+'</button>'+
     (ex!=null?'<button class="ghost" data-act="clear-hole">Remove hole '+h+' score</button>':'')+
-    '<details'+(ui.draft?' open':'')+'><summary data-act="setup-toggle">Ticks (only if the committee gives any)</summary>'+setup+'</details></section>';
+    '<details'+(ui.draft?' open':'')+'><summary data-act="setup-toggle">Ticks and ghost holes (committee)</summary>'+setup+'</details></section>';
 }
 
 function render(){
@@ -277,7 +328,7 @@ function flush(){
   if(!configured||net.flushing||!queue.length)return;
   net.flushing=true;
   var op=queue[0];
-  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,ticks:op.ticks};
+  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive,ticks:op.ticks,bonus:op.bonus};
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(res){
@@ -303,31 +354,35 @@ function flush(){
 function enqueue(op,okText){
   // A newer save for the same hole replaces an unsent older one.
   if(op.action==='score'||op.action==='clear')queue=queue.filter(function(q){return !((q.action==='score'||q.action==='clear')&&q.room===op.room&&q.hole===op.hole&&q!==queue[0]);});
-  if(op.action==='ticks')queue=queue.filter(function(q,i){return q.action!=='ticks'||i===0;});
+  if(op.action==='bonus')queue=queue.filter(function(q,i){return q.action!=='bonus'||i===0;});
   queue.push(op);saveQueue();applyQueue();
   ui.msg={k:'ok',t:okText};
-  ui.hole=null;ui.v=null;ui.draft=null;
+  ui.hole=null;ui.v=null;ui.drive=undefined;ui.draft=null;
   render();flush();
 }
 
 root.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;var a=el.getAttribute('data-act');
   if(a==='hole')return;
-  if(a==='setup-toggle'){e.preventDefault();ui.draft=ui.draft?null:clone(state.ticks);render();return;}
+  if(a==='setup-toggle'){e.preventDefault();ui.draft=ui.draft?null:clone(state.bonus);ui.bRoom=ui.team;render();return;}
+  if(a==='broom'){ui.bRoom=el.getAttribute('data-t');render();return;}
+  if(a==='bticks'||a==='bghosts'){var kind=a.slice(1),hh=+el.getAttribute('data-h'),arr=ui.draft[ui.bRoom][kind],ix=arr.indexOf(hh);if(ix>=0)arr.splice(ix,1);else{arr.push(hh);arr.sort(function(p,q){return p-q;});}render();return;}
+  if(a==='drive'){ui.drive=el.getAttribute('data-p');render();return;}
   if(a==='keeper-on'){keeper=true;ls.set(KEY+'-keeper','1');render();var k=document.getElementById('keeper');if(k&&k.scrollIntoView)k.scrollIntoView({behavior:'smooth',block:'start'});return;}
   if(a==='keeper-off'){keeper=false;ls.set(KEY+'-keeper','0');render();return;}
-  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
+  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.drive=undefined;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
   if(a==='v-'){ui.v=Math.max(1,ui.v-1);render();return;}
   if(a==='v+'){ui.v=Math.min(15,ui.v+1);render();return;}
-  if(a==='tk-'||a==='tk+'){var t=el.getAttribute('data-t');ui.draft[t]=Math.max(0,Math.min(18,ui.draft[t]+(a==='tk+'?1:-1)));render();return;}
   if(!configured){ui.msg={k:'warn',t:'Saving isn’t set up yet.'};render();return;}
-  if(a==='save-hole'){var h=ui.hole,v=ui.v;enqueue({action:'score',room:ui.team,hole:h,strokes:v},'Hole '+h+' saved ('+v+').');return;}
+  if(a==='save-hole'){
+    if(!ui.drive){ui.msg={k:'warn',t:'Tap whose drive you used, then save.'};render();return;}
+    var h=ui.hole,v=ui.v,dr=ui.drive;enqueue({action:'score',room:ui.team,hole:h,strokes:v,drive:dr},'Hole '+h+' saved ('+v+', '+dr+'’s drive).');return;}
   if(a==='clear-hole'){var h2=ui.hole;enqueue({action:'clear',room:ui.team,hole:h2},'Hole '+h2+' removed.');return;}
-  if(a==='save-ticks'){enqueue({action:'ticks',ticks:clone(ui.draft)},'Ticks saved.');return;}
+  if(a==='save-bonus'){enqueue({action:'bonus',bonus:clone(ui.draft)},'Ticks and ghost holes saved.');return;}
 });
 root.addEventListener('change',function(e){
   var el=e.target;
-  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;render();}
+  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;ui.drive=undefined;render();}
 });
 
 render();

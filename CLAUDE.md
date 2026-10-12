@@ -54,8 +54,16 @@ Google Apps Script web app (Code.gs)  →  Google Sheet tabs "Scores" and "Ticks
   retrying · N saves waiting for signal".
 
 ### Scoring rules (match the printed rules on the page)
-- Each room's score = strokes − par over the holes played, minus **ticks** (committee bonus
-  strokes; usually 0). Lower is better.
+- Each room's score = strokes − par over the holes played, minus **ticks** on the holes it has
+  played (a tick is 1 stroke off on a committee-chosen hole; it only counts once that hole is
+  played so the board is fair mid-round). Lower is better.
+- **Ticks and ghost holes** are per room, per hole (Day 2 sheet, Bonus #2). The committee sets
+  them in the scorekeeper tools ("Ticks and ghost holes"); they're stored in the `Bonus` tab as
+  comma lists ("1,5"). Cards mark them T / G; the scorekeeper sees a note on those holes.
+  Ghost holes don't change the math; they're just shown.
+- **Drives**: every save must say whose tee shot was used (Scores column E, `Drive`). Each card
+  counts drives per player (rule: at least 2 each) and warns once a room is close to running
+  out of holes to get everyone to 2.
 - Ties use countback: compare holes in stroke-index order (hardest first: 3, 13, 6, 2, 1, …),
   using only holes both rooms have played. If it's still tied, both rooms show `T`.
 - Top 3 rooms win a pot (gold position numbers and a "Pot N" badge).
@@ -63,8 +71,10 @@ Google Apps Script web app (Code.gs)  →  Google Sheet tabs "Scores" and "Ticks
 ## Backend (apps-script/Code.gs)
 - The script must be **bound to the Sheet** (created from the Sheet via Extensions → Apps
   Script). `SpreadsheetApp.getActive()` returns null in a standalone script.
-- `setup()` creates the `Scores` (Room, Hole, Strokes, Saved at) and `Ticks` (Room, Ticks)
-  tabs. **It must be run once by hand.** Without it, GET still works (`readState_` tolerates
+- `setup()` creates the `Scores` (Room, Hole, Strokes, Saved at, Drive), `Ticks` (old
+  per-room totals, no longer used by the page) and `Bonus` (Room, Tick holes, Ghost holes)
+  tabs, plus the Ryder Cup tabs. It only adds what's missing, so rerun it after pasting a new
+  version. **It must be run by hand.** Without it, GET still works (`readState_` tolerates
   missing tabs) but every save throws, and the browser reports that as "Failed to fetch"
   (an error page from Google has no CORS headers). This happened at launch.
 - `resetRound()` clears all scores and ticks; run it by hand from the editor before a new round.
