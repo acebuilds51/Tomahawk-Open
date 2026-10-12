@@ -78,6 +78,12 @@ Google Apps Script web app (Code.gs)  →  Google Sheet tabs "Scores" and "Ticks
   missing tabs) but every save throws, and the browser reports that as "Failed to fetch"
   (an error page from Google has no CORS headers). This happened at launch.
 - `resetRound()` clears all scores and ticks; run it by hand from the editor before a new round.
+- **Committee PIN**: saving ticks/ghost holes (`bonus`, old `ticks`) and Ryder Cup matchups
+  (`matches`) requires `pin` to match the Script Property `COMMITTEE_PIN` (Apps Script editor →
+  Project Settings → Script Properties). Never put the PIN in this repo: it's public. Errors:
+  `bad_pin` (the page clears its remembered PIN and says so) and `no_pin` (property not set,
+  so those saves are refused). Score entry stays open to everyone by design. Each page
+  remembers the PIN in `localStorage` (`rm27-pin`, `rc27-pin`) after it's typed once.
 - Deployment: Web app, **Execute as: Me**, **Who has access: Anyone** (not "Anyone with a
   Google account": that sends phones to a sign-in page and breaks the page).
 - After editing Code.gs in the editor: Deploy → Manage deployments → pencil → Version:

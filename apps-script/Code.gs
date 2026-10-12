@@ -76,6 +76,17 @@ function resetRound() {
   if (b && b.getLastRow() > 1) b.getRange(2, 2, b.getLastRow() - 1, 2).setValue('');
 }
 
+/**
+ * Committee PIN for ticks, ghost holes and Ryder Cup matchups. It lives in Script Properties
+ * (Project Settings > Script Properties > COMMITTEE_PIN), never in this file: the repo is public.
+ * Returns '' when the PIN matches, otherwise an error code for the page.
+ */
+function pinError_(pin) {
+  var want = PropertiesService.getScriptProperties().getProperty('COMMITTEE_PIN');
+  if (!want) return 'no_pin';
+  return String(pin == null ? '' : pin).trim() === String(want).trim() ? '' : 'bad_pin';
+}
+
 function holeList_(v) {
   var seen = {};
   String(v == null ? '' : v).split(/[^0-9]+/).forEach(function (x) {
@@ -119,6 +130,8 @@ function doPost(e) {
         s.deleteRow(at);
       }
     } else if (body.action === 'bonus') {
+      var pe = pinError_(body.pin);
+      if (pe) return json_({ ok: false, error: pe });
       var b = ss.getSheetByName(BONUS);
       if (!b) return json_({ ok: false, error: 'not_set_up' });
       var bonus = body.bonus || {};
@@ -132,6 +145,8 @@ function doPost(e) {
         else b.appendRow([r, vals[0], vals[1]]);
       });
     } else if (body.action === 'ticks') {
+      var pe2 = pinError_(body.pin);
+      if (pe2) return json_({ ok: false, error: pe2 });
       var t = ss.getSheetByName(TICKS);
       var data = body.ticks || {};
       var trows = t.getLastRow() > 1 ? t.getRange(2, 1, t.getLastRow() - 1, 1).getValues() : [];
@@ -210,6 +225,8 @@ function postRc_(body) {
       s.deleteRow(at);
     }
   } else if (body.action === 'matches') {
+    var pe = pinError_(body.pin);
+    if (pe) return { ok: false, error: pe };
     var m = ss.getSheetByName(RC_MATCHES);
     if (!m) return { ok: false, error: 'not_set_up' };
     var list = body.matches || [];

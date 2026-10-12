@@ -12,7 +12,8 @@ Sheet.prototype={getLastRow(){return this.rows.length;},appendRow(r){this.rows.p
    setValue(x){for(let i=0;i<nr;i++)for(let j=0;j<nc;j++){const t=sh.rows[r-1+i]=sh.rows[r-1+i]||[];t[c-1+j]=x;}},
    clearContent(){for(let i=0;i<nr;i++)for(let j=0;j<nc;j++)sh.rows[r-1+i][c-1+j]='';}};}};
 const sheets={};
-const ctx={SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
+const props={COMMITTEE_PIN:'2468'};
+const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null})},SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
  LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:t=>({setMimeType(){return this;},text:t})},Date,JSON,Math,Number,String};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(ROOT,'apps-script','Code.gs'),'utf8'),ctx);ctx.setup();
@@ -61,9 +62,13 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  pickHole(2); q('[data-act=clear-hole]').click(); await wait(20);
  check('removed hole gone from Sheet',!sheets['RC Scores'].rows.some(r=>r[0]===2&&r[1]===2),JSON.stringify(sheets['RC Scores'].rows.filter(r=>r[0]===2)));
  // Change who tees off on 7 for match 3 Red and swap a player
- q('[data-act=setup-toggle]').click();
- const altSel=q('select[data-set="2.redAlt"]'); altSel.value='1'; altSel.dispatchEvent(new w.Event('change',{bubbles:true}));
- q('[data-act=save-setup]').click(); await wait(30);
+ const setPin=v=>{const p=q('#pin');p.value=v;p.dispatchEvent(new w.Event('input',{bubbles:true}));};
+ const swapAlt=()=>{q('[data-act=setup-toggle]').click();const altSel=q('select[data-set="2.redAlt"]'); altSel.value='1'; altSel.dispatchEvent(new w.Event('change',{bubbles:true}));};
+ swapAlt(); q('[data-act=save-setup]').click(); await wait(20);
+ check('matchups need a PIN',q('.msg').textContent.includes('Enter the committee PIN'),q('.msg').textContent);
+ setPin('0000'); q('[data-act=save-setup]').click(); await wait(40);
+ check('wrong PIN leaves matchups alone',q('.msg').textContent.includes('Wrong committee PIN')&&sheets['RC Matches'].rows[3][6]===1,q('.msg').textContent+' '+JSON.stringify(sheets['RC Matches'].rows[3]));
+ swapAlt(); setPin('2468'); q('[data-act=save-setup]').click(); await wait(40);
  check('RC Matches tab updated',sheets['RC Matches'].rows[3][6]===2,JSON.stringify(sheets['RC Matches'].rows[3]));
  q('[data-act=pick][data-i="2"]').click(); pickHole(7);
  check('hole 7 tee shot follows setup',q('.tee').textContent.includes('Pat Ryan “Flyin Pat”'),q('.tee').textContent);

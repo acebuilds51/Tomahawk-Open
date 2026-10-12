@@ -119,6 +119,7 @@ summary{cursor:pointer;font-weight:600}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
 .dot.off{background:var(--warn)}
 .banner{padding:12px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:15px}
+.pin{font:inherit;font-size:18px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;letter-spacing:.2em}
 @media (max-width:420px){.side .num{font-size:52px}.pick{font-size:17px}}
 @media (max-width:560px){.steppers{grid-template-columns:minmax(0,1fr)}.step{display:flex;justify-content:space-between;align-items:center;padding:10px 14px}.step .t{min-width:3.2em;text-align:left}.step .row{gap:10px}.sb{width:50px;height:50px;font-size:26px}.step .v{font-size:46px}.keeper{padding:14px}}
 </style>
@@ -179,7 +180,7 @@ function applyQueue(){
 applyQueue();
 
 var keeper=ls.get(KEY+'-keeper')==='1';
-var ui={match:Math.min(5,Math.max(0,parseInt(ls.get(KEY+'-match')||'0',10)||0)),hole:null,r:null,b:null,msg:null,draft:null};
+var ui={match:Math.min(5,Math.max(0,parseInt(ls.get(KEY+'-match')||'0',10)||0)),hole:null,r:null,b:null,msg:null,draft:null,pin:ls.get(KEY+'-pin')||''};
 
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -281,7 +282,8 @@ function keeperHtml(){
       function alt(side){var pair=dm[side],v=dm[side+'Alt'];return '<select data-set="'+j+'.'+side+'Alt" aria-label="Tees off on 7"><option value="0"'+(v===0?' selected':'')+'>'+esc(label(pair[0])||'Player 1')+' tees off on 7</option><option value="1"'+(v===1?' selected':'')+'>'+esc(label(pair[1])||'Player 2')+' tees off on 7</option></select>';}
       return '<div class="sm"><h3>Match '+(j+1)+'</h3><span class="sr">Red</span><div class="sg">'+sel(j+'.red.0',dm.red[0])+sel(j+'.red.1',dm.red[1])+'</div>'+alt('red')+
         '<span class="sbl">Blue</span><div class="sg">'+sel(j+'.blue.0',dm.blue[0])+sel(j+'.blue.1',dm.blue[1])+'</div>'+alt('blue')+'</div>';
-    }).join('')+'<button class="save" data-act="save-setup">Save matches</button></div>';
+    }).join('')+'<div><label class="lab" for="pin">Committee PIN</label><input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" value="'+esc(ui.pin)+'"></div>'+
+      '<button class="save" data-act="save-setup">Save matches</button></div>';
   }
   return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
     '<div><span class="lab">Match</span><div class="picks">'+picks+'</div>'+
@@ -324,7 +326,7 @@ function flush(){
   if(!configured||net.flushing||!queue.length)return;
   net.flushing=true;
   var op=queue[0];
-  var body={game:'rc',action:op.action,match:op.match,hole:op.hole,red:op.red,blue:op.blue,matches:op.matches};
+  var body={game:'rc',action:op.action,match:op.match,hole:op.hole,red:op.red,blue:op.blue,matches:op.matches,pin:op.pin};
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(res){
@@ -335,7 +337,10 @@ function flush(){
         throw new Error('busy');
       }else{
         queue.shift();saveQueue();applyQueue();
-        ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
+        var err=res&&res.error;
+        if(err==='bad_pin'){ui.pin='';ls.set(KEY+'-pin','');ui.msg={k:'warn',t:'Wrong committee PIN, so the matches were not changed. Enter the PIN and save again.'};}
+        else if(err==='no_pin')ui.msg={k:'warn',t:'The committee PIN isn’t set up in the Sheet yet, so matches can’t be changed.'};
+        else ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
       }
       render();
       if(queue.length)flush();
@@ -374,7 +379,9 @@ root.addEventListener('click',function(e){
     var all=[];ui.draft.forEach(function(d){all=all.concat(d.red,d.blue);});
     var used=all.filter(Boolean),dup=used.filter(function(v,ix){return used.indexOf(v)!==ix;});
     if(dup.length){ui.msg={k:'warn',t:label(dup[0])+' is picked in two spots. Fix that, then save.'};render();return;}
-    enqueue({action:'matches',matches:clone(ui.draft)},'Matches saved.');return;}
+    if(!ui.pin){ui.msg={k:'warn',t:'Enter the committee PIN, then save.'};render();var pe=document.getElementById('pin');if(pe)pe.focus();return;}
+    ls.set(KEY+'-pin',ui.pin);
+    enqueue({action:'matches',matches:clone(ui.draft),pin:ui.pin},'Matches sent.');return;}
 });
 root.addEventListener('change',function(e){
   var el=e.target;
@@ -384,6 +391,7 @@ root.addEventListener('change',function(e){
   if(p[1]==='redAlt'||p[1]==='blueAlt')dm[p[1]]=+el.value;else dm[p[1]][+p[2]]=el.value;
   render();
 });
+root.addEventListener('input',function(e){if(e.target.id==='pin')ui.pin=e.target.value.trim();});
 
 render();
 if(configured){

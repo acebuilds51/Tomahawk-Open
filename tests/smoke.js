@@ -12,7 +12,8 @@ Sheet.prototype={getLastRow(){return this.rows.length;},appendRow(r){this.rows.p
    setValue(x){for(let i=0;i<nr;i++)for(let j=0;j<nc;j++){const t=sh.rows[r-1+i]=sh.rows[r-1+i]||[];t[c-1+j]=x;}},
    clearContent(){for(let i=0;i<nr;i++)for(let j=0;j<nc;j++)sh.rows[r-1+i][c-1+j]='';}};}};
 const sheets={};
-const ctx={SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
+const props={COMMITTEE_PIN:'2468'};
+const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null})},SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
  LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:t=>({setMimeType(){return this;},text:t})},Date,JSON,Math,Number,String,Object};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(ROOT,'apps-script','Code.gs'),'utf8'),ctx);
@@ -52,9 +53,14 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  const drv=id=>[...card(id).querySelectorAll('.drv span')].slice(1).map(s=>s.textContent).join(', ');
  check('drive counts on the card',drv('905')==='Fitz 2, Blanch 0, Scoobie 0, Doc 1',drv('905'));
  // Ticks and ghost holes: Room 205 gets a tick on 1 and 5, ghost hole on 2
- q('[data-act=setup-toggle]').click(); q('[data-act=broom][data-t="205"]').click();
- q('[data-act=bticks][data-h="1"]').click(); q('[data-act=bticks][data-h="5"]').click(); q('[data-act=bghosts][data-h="2"]').click();
- q('[data-act=save-bonus]').click(); await wait(30);
+ const setPin=v=>{const p=q('#pin');p.value=v;p.dispatchEvent(new w.Event('input',{bubbles:true}));};
+ const markBonus=()=>{q('[data-act=setup-toggle]').click(); q('[data-act=broom][data-t="205"]').click();
+  q('[data-act=bticks][data-h="1"]').click(); q('[data-act=bticks][data-h="5"]').click(); q('[data-act=bghosts][data-h="2"]').click();};
+ markBonus(); q('[data-act=save-bonus]').click(); await wait(20);
+ check('ticks need a PIN',q('.msg').textContent.includes('Enter the committee PIN'),q('.msg').textContent);
+ setPin('1111'); q('[data-act=save-bonus]').click(); await wait(40);
+ check('wrong PIN is rejected by the Sheet',q('.msg').textContent.includes('Wrong committee PIN')&&JSON.stringify(sheets.Bonus.rows.find(r=>r[0]==='205'))==='["205","",""]'&&!card('205').querySelector('.holes').textContent.includes('T'),q('.msg').textContent+' '+JSON.stringify(sheets.Bonus.rows));
+ markBonus(); setPin('2468'); q('[data-act=save-bonus]').click(); await wait(40);
  check('Bonus tab saved as text lists',JSON.stringify(sheets.Bonus.rows.find(r=>r[0]==='205'))==='["205","1,5","2"]',JSON.stringify(sheets.Bonus.rows));
  check('card marks T and G holes',card('205').querySelector('.holes').textContent.includes('1T')&&card('205').querySelector('.holes').textContent.includes('2G'),card('205').querySelector('.holes').textContent);
  q('[data-act=pick][data-t="205"]').click(); pickHole(1);
@@ -85,6 +91,12 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  const w2=phone(); await wait(60);
  check('phone 2 sees same board',board(w2)===board(),board(w2)+' vs '+board());
  check('phone 2 sees drives and marks',[...w2.document.querySelectorAll('.drv')].some(d=>d.textContent.includes('Scoobie 1'))&&w2.document.body.textContent.includes('G = ghost hole'),'');
+ const res=JSON.parse(ctx.doPost({postData:{contents:JSON.stringify({action:'bonus',bonus:{'905':{ticks:[1,2,3]}},pin:'2468 '})}}).text);
+ check('PIN with a stray space still works',res.ok===true,JSON.stringify(res).slice(0,60));
+ delete props.COMMITTEE_PIN;
+ const res2=JSON.parse(ctx.doPost({postData:{contents:JSON.stringify({action:'bonus',bonus:{},pin:'2468'})}}).text);
+ check('no PIN set in the Sheet blocks ticks',res2.ok===false&&res2.error==='no_pin',JSON.stringify(res2));
+ props.COMMITTEE_PIN='2468';
  // Ryder Cup on the same script still answers
  const rc=JSON.parse(ctx.doGet({parameter:{game:'rc'}}).text); check('ryder cup GET unaffected',rc.matches.length===6,JSON.stringify(rc).slice(0,60));
  ctx.resetRound();

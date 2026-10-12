@@ -116,6 +116,7 @@ summary{cursor:pointer;font-weight:600}
 .hb{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 0;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
 .hb[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--on-gold)}
 :root{--on-gold:#231618}
+.pin{font:inherit;font-size:18px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;letter-spacing:.2em}
 </style>
 </head>
 <body>
@@ -189,7 +190,7 @@ function needLine(t){
 
 var keeper=ls.get(KEY+'-keeper')==='1';
 var savedTeam=ls.get(KEY+'-team');
-var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null,draft:null};
+var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null,draft:null,pin:ls.get(KEY+'-pin')||''};
 
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -288,6 +289,7 @@ function keeperHtml(){
       '<div class="picks">'+TEAMS.map(function(t){var c=ui.draft[t.id].ticks.length+ui.draft[t.id].ghosts.length;return '<button class="pick" data-act="broom" data-t="'+t.id+'" aria-pressed="'+(t.id===br)+'">'+t.id+(c?' •':'')+'</button>';}).join('')+'</div>'+
       '<div><span class="lab">Room '+br+' tick holes (1 stroke off each)</span>'+grid('ticks')+'</div>'+
       '<div><span class="lab">Room '+br+' ghost holes</span>'+grid('ghosts')+'</div>'+
+      '<div><label class="lab" for="pin">Committee PIN</label><input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" value="'+esc(ui.pin)+'"></div>'+
       '<button class="save" data-act="save-bonus">Save ticks and ghost holes</button></div>';
   }
   return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
@@ -328,7 +330,7 @@ function flush(){
   if(!configured||net.flushing||!queue.length)return;
   net.flushing=true;
   var op=queue[0];
-  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive,ticks:op.ticks,bonus:op.bonus};
+  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive,ticks:op.ticks,bonus:op.bonus,pin:op.pin};
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(res){
@@ -338,9 +340,12 @@ function flush(){
       }else if(res&&(res.error==='busy')){
         throw new Error('busy');
       }else{
-        // The Sheet rejected it (bad hole or score); drop it so it doesn't block the rest.
+        // The Sheet rejected it; drop it so it doesn't block the rest.
         queue.shift();saveQueue();applyQueue();
-        ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
+        var err=res&&res.error;
+        if(err==='bad_pin'){ui.pin='';ls.set(KEY+'-pin','');ui.msg={k:'warn',t:'Wrong committee PIN, so the ticks and ghost holes were not saved. Enter the PIN and save again.'};}
+        else if(err==='no_pin')ui.msg={k:'warn',t:'The committee PIN isn’t set up in the Sheet yet, so ticks and ghost holes can’t be saved.'};
+        else ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
       }
       render();
       if(queue.length)flush();
@@ -378,12 +383,16 @@ root.addEventListener('click',function(e){
     if(!ui.drive){ui.msg={k:'warn',t:'Tap whose drive you used, then save.'};render();return;}
     var h=ui.hole,v=ui.v,dr=ui.drive;enqueue({action:'score',room:ui.team,hole:h,strokes:v,drive:dr},'Hole '+h+' saved ('+v+', '+dr+'’s drive).');return;}
   if(a==='clear-hole'){var h2=ui.hole;enqueue({action:'clear',room:ui.team,hole:h2},'Hole '+h2+' removed.');return;}
-  if(a==='save-bonus'){enqueue({action:'bonus',bonus:clone(ui.draft)},'Ticks and ghost holes saved.');return;}
+  if(a==='save-bonus'){
+    if(!ui.pin){ui.msg={k:'warn',t:'Enter the committee PIN, then save.'};render();var pe=document.getElementById('pin');if(pe)pe.focus();return;}
+    ls.set(KEY+'-pin',ui.pin);
+    enqueue({action:'bonus',bonus:clone(ui.draft),pin:ui.pin},'Ticks and ghost holes sent.');return;}
 });
 root.addEventListener('change',function(e){
   var el=e.target;
   if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;ui.drive=undefined;render();}
 });
+root.addEventListener('input',function(e){if(e.target.id==='pin')ui.pin=e.target.value.trim();});
 
 render();
 if(configured){
