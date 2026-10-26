@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tomahawk Committee Setup</title>
+<meta name="theme-color" content="#561520">
+<meta name="robots" content="noindex">
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+/* Layout: one column of cards. Same oxblood theme as the scoreboard. */
+:root{
+  --bg:#f7f2f1;--surface:#ffffff;--ink:#231618;--muted:#6a5a5c;--line:#e6d8d9;
+  --board:#561520;--board-ink:#fbf3f3;--board-muted:#dcb3b9;
+  --gold:#e6b54d;--gold-soft:#f8ecd4;--gold-ink:#8a5f0e;--ok:#2d7a46;--ok-soft:#e1f2e6;--warn:#8a5200;--warn-soft:#fff1d6;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#140d0e;--surface:#201517;--ink:#f1e6e7;--muted:#b09a9d;--line:#3a2a2c;
+  --board:#4a111b;--board-ink:#fbf1f2;--board-muted:#cfa1a8;
+  --gold:#e6b54d;--gold-soft:#3a2a12;--gold-ink:#e6b54d;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#140d0e;--surface:#201517;--ink:#f1e6e7;--muted:#b09a9d;--line:#3a2a2c;
+  --board:#4a111b;--board-ink:#fbf1f2;--board-muted:#cfa1a8;
+  --gold:#e6b54d;--gold-soft:#3a2a12;--gold-ink:#e6b54d;--ok:#62c483;--ok-soft:#173222;--warn:#f0b54a;--warn-soft:#33270f;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:16px 56px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.head{background:var(--board);color:var(--board-ink);border-radius:14px;padding:16px;text-align:center}
+.head h1{font-family:var(--display);font-size:30px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0}
+.head p{margin:4px 0 0;color:var(--board-muted);font-size:14px}
+.head a{color:inherit}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+.card>*{min-width:0}
+h2{font-family:var(--display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:0}
+h3{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:.04em;margin:0}
+label{font-size:13px;color:var(--muted);display:grid;gap:4px}
+input,select{font:inherit;font-size:16px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;min-width:0}
+input[type=checkbox]{width:22px;height:22px;padding:0}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.check{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)}
+.grid9{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px}
+.grid9 input{padding:8px 2px;text-align:center}
+.grid9 span{font-size:11px;color:var(--muted);text-align:center}
+button{font:inherit;cursor:pointer;color:inherit}
+.btn{background:var(--board);color:var(--board-ink);border:0;border-radius:10px;padding:12px 16px;font-family:var(--display);font-size:19px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;color:var(--ink);font-size:14px}
+.ghost.warn{color:var(--warn);border-color:var(--warn)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.ev{border-top:1px solid var(--line);padding-top:10px;display:grid;gap:6px}
+.ev:first-of-type{border-top:0;padding-top:0}
+.ev b{font-size:17px}
+.meta{font-size:14px;color:var(--muted)}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:1px 9px;margin-left:6px;vertical-align:2px}
+.tag.cur{background:var(--gold-soft);color:var(--gold-ink)}
+.tag.fin{background:var(--line);color:var(--muted)}
+.room{background:var(--bg);border-radius:10px;padding:12px;display:grid;gap:8px}
+.msg{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:15px}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+.note{font-size:14px;color:var(--muted);margin:0}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+@media (max-width:420px){.row3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function(){
+var API_URL='https://script.google.com/macros/s/AKfycbxE2TauUGWd6oawawxkVuR8aaFRzWqLTdq4pd0EezxxryBKuxtaFhfOrtG4C8ZGvlQxAg/exec';   // same as index.html
+var root=document.getElementById('root');
+function store(){return {get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};}
+var ls=store();
+var S={pin:ls.get('tom-pin')||'',unlocked:false,busy:false,msg:null,list:null,ev:null,course:null};
+
+var ERR={bad_pin:'Wrong committee PIN.',no_pin:'The committee PIN isn’t set up in the Sheet (Apps Script > Project Settings > Script Properties > COMMITTEE_PIN).',
+  course_name:'Give the course a name.',course_par:'Every hole needs a par between 3 and 6.',course_hcp:'Hole handicaps must use each number 1 to 18 exactly once.',
+  event_name:'Give the event a name.',event_date:'Pick the date.',event_course:'Pick a course from the list (add it under Courses first).',
+  rooms_count:'An event needs 1 to 12 rooms.',room_id:'Every room needs its own room number.',room_players:'Every room needs 1 to 5 players.',
+  room_strokes:'Strokes must be 0 or more, in steps of ½.',room_ghosts:'Ghost holes must be a whole number from 0 to 18.',no_event:'That event wasn’t found.',busy:'The Sheet is busy. Try again in a few seconds.'};
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function day(d){try{var p=d.split('-');return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString([], {weekday:'short',month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+
+function api(body){
+  body.pin=S.pin;S.busy=true;render();
+  return fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(res){S.busy=false;
+      if(!res.ok){S.msg={k:'warn',t:ERR[res.error]||('The Sheet said: '+res.error)};if(res.error==='bad_pin'){S.unlocked=false;ls.set('tom-pin','');}render();return null;}
+      S.list=res;return res;})
+    .catch(function(){S.busy=false;S.msg={k:'warn',t:'Couldn’t reach the Sheet. Check your signal and try again.'};render();return null;});
+}
+
+/* ---------- Views ---------- */
+function lockHtml(){
+  return '<section class="card"><h2>Committee PIN</h2><p class="note">Only the committee can set up events and courses. Scores stay open to everyone on the scoreboard.</p>'+
+    '<label>PIN<input id="pin" type="password" inputmode="numeric" autocomplete="off" value="'+esc(S.pin)+'"></label>'+
+    '<div class="btns"><button class="btn" data-act="unlock">Unlock</button></div></section>';
+}
+
+function eventsHtml(){
+  var L=S.list,cur=L.current;
+  var rows=L.events.map(function(e){
+    return '<div class="ev"><div><b>'+esc(e.name)+'</b>'+(e.id===cur?'<span class="tag cur">On the scoreboard now</span>':'')+(e.status==='final'?'<span class="tag fin">Final</span>':'')+'</div>'+
+      '<div class="meta">'+esc(day(e.date))+' · '+esc(e.course)+' · '+e.rooms.length+' rooms</div>'+
+      '<div class="btns"><button class="ghost" data-act="edit" data-id="'+esc(e.id)+'">Edit</button>'+
+      (e.id!==cur?'<button class="ghost" data-act="current" data-id="'+esc(e.id)+'">Put on the scoreboard</button>':'')+
+      (e.status==='final'?'<button class="ghost" data-act="reopen" data-id="'+esc(e.id)+'">Reopen for scores</button>':'<button class="ghost warn" data-act="final" data-id="'+esc(e.id)+'">Mark final</button>')+
+      '<a class="ghost" href="./?event='+encodeURIComponent(e.id)+'" target="_blank" rel="noopener" style="text-decoration:none">View</a></div></div>';
+  }).join('');
+  return '<section class="card"><h2>Events</h2><p class="note">The event marked "On the scoreboard now" is what everyone sees at the main link. A final event can’t take new scores.</p>'+
+    '<div class="btns"><button class="btn" data-act="new">New event</button></div>'+(rows||'<p class="note">No events yet.</p>')+'</section>';
+}
+
+function eventEditor(){
+  var e=S.ev,L=S.list;
+  var courses=L.courses.map(function(k){return '<option'+(k.name===e.course?' selected':'')+'>'+esc(k.name)+'</option>';}).join('');
+  var rooms=e.rooms.map(function(r,i){
+    var players='';for(var j=0;j<4;j++)players+='<input data-path="rooms.'+i+'.p.'+j+'" placeholder="Player '+(j+1)+(j===3?' (leave blank for a threesome)':'')+'" value="'+esc(r.p[j]||'')+'">';
+    return '<div class="room"><div class="row2"><label>Room number<input data-path="rooms.'+i+'.id" value="'+esc(r.id)+'"></label>'+
+      '<label>Starts on<select data-path="rooms.'+i+'.start"><option value="1"'+(r.start!==10?' selected':'')+'>Front (#1)</option><option value="10"'+(r.start===10?' selected':'')+'>Back (#10)</option></select></label></div>'+
+      '<label>Players (nicknames)</label><div class="row2">'+players+'</div>'+
+      '<div class="row3"><label>Strokes off<input data-path="rooms.'+i+'.strokes" type="number" inputmode="decimal" min="0" step="0.5" value="'+(r.strokes||0)+'"></label>'+
+      '<label>Ghost holes<input data-path="rooms.'+i+'.ghosts" type="number" inputmode="numeric" min="0" step="1" value="'+(r.ghosts||0)+'"></label>'+
+      '<label class="check" style="align-self:end"><input type="checkbox" data-path="rooms.'+i+'.perSide"'+(r.perSide?' checked':'')+'> That many per side</label></div>'+
+      '<label>Note on the card (optional)<input data-path="rooms.'+i+'.note" value="'+esc(r.note||'')+'" placeholder="e.g. Threesome: one player hits an extra ball every shot"></label>'+
+      '<div class="btns"><button class="ghost warn" data-act="room-del" data-i="'+i+'">Remove room '+esc(r.id)+'</button></div></div>';
+  }).join('');
+  return '<section class="card" id="editor"><h2>'+(e.id?'Edit event':'New event')+'</h2>'+
+    '<label>Event name<input data-path="name" value="'+esc(e.name)+'"></label>'+
+    '<div class="row2"><label>Date<input data-path="date" type="date" value="'+esc(e.date)+'"></label>'+
+    '<label>Course<select data-path="course"><option value="">Pick a course</option>'+courses+'</select></label></div>'+
+    '<h3>Rooms</h3>'+rooms+
+    '<div class="btns"><button class="ghost" data-act="room-add">Add a room</button></div>'+
+    (e.id?'':'<label class="check"><input type="checkbox" data-path="makeCurrent"'+(e.makeCurrent?' checked':'')+'> Put this event on the scoreboard now</label>')+
+    '<div class="btns"><button class="btn" data-act="save-event">'+(S.busy?'Saving…':'Save event')+'</button><button class="ghost" data-act="cancel">Cancel</button></div></section>';
+}
+
+function coursesHtml(){
+  var rows=S.list.courses.map(function(k,i){
+    return '<div class="ev"><div><b>'+esc(k.name)+'</b></div><div class="meta">'+esc(k.place)+(k.place?' · ':'')+'Par '+k.par.reduce(function(a,b){return a+b;},0)+'</div>'+
+      '<div class="btns"><button class="ghost" data-act="course-edit" data-i="'+i+'">Edit</button></div></div>';}).join('');
+  return '<section class="card"><h2>Courses</h2><p class="note">Saved once, picked from the list for each event. An event keeps the pars it was set up with, so editing a course later doesn’t change past results.</p>'+
+    '<div class="btns"><button class="btn" data-act="course-new">Add a course</button></div>'+rows+'</section>';
+}
+
+function courseEditor(){
+  var k=S.course;
+  var grid=function(kind,from){var o='';for(var h=from;h<from+9;h++)o+='<span>'+h+'</span>';for(var h2=from;h2<from+9;h2++)o+='<input data-path="'+kind+'.'+(h2-1)+'" inputmode="numeric" value="'+esc(k[kind][h2-1]==null?'':k[kind][h2-1])+'" aria-label="Hole '+h2+' '+kind+'">';return '<div class="grid9">'+o+'</div>';};
+  return '<section class="card" id="course-editor"><h2>'+(k.orig?'Edit course':'Add a course')+'</h2>'+
+    '<div class="row2"><label>Course name<input data-path="name" value="'+esc(k.name)+'"></label><label>Where<input data-path="place" value="'+esc(k.place)+'" placeholder="Calabash, NC"></label></div>'+
+    '<h3>Par</h3>'+grid('par',1)+grid('par',10)+
+    '<h3>Hole handicap (1 = hardest)</h3><p class="note">From the scorecard’s men’s handicap row. Used to break ties.</p>'+grid('hcp',1)+grid('hcp',10)+
+    '<div class="btns"><button class="btn" data-act="save-course">'+(S.busy?'Saving…':'Save course')+'</button><button class="ghost" data-act="cancel">Cancel</button></div></section>';
+}
+
+function render(){
+  var h='<div class="wrap"><header class="head"><h1>Committee setup</h1><p>Tomahawk Open · Roommates Scramble · <a href="./">Back to the scoreboard</a></p></header>';
+  if(S.msg)h+='<div class="msg'+(S.msg.k==='ok'?' ok':'')+'" role="status">'+esc(S.msg.t)+'</div>';
+  if(!S.unlocked||!S.list)h+=lockHtml();
+  else if(S.ev)h+=eventEditor();
+  else if(S.course)h+=courseEditor();
+  else h+=eventsHtml()+coursesHtml();
+  h+='</div>';
+  root.innerHTML=h;
+}
+
+/* ---------- Editing ---------- */
+function setPath(obj,path,val){var p=path.split('.'),o=obj;for(var i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=val;}
+function newRoom(){return {id:'',p:['','','',''],strokes:0,ghosts:0,perSide:false,start:1,note:''};}
+function editEvent(e){
+  S.ev=clone(e);
+  S.ev.rooms=S.ev.rooms.map(function(r){var o=newRoom();for(var k in r)o[k]=r[k];o.p=(r.p||[]).slice(0,4);while(o.p.length<4)o.p.push('');return o;});
+  window.scrollTo(0,0);
+}
+
+root.addEventListener('input',function(e){
+  var el=e.target,path=el.getAttribute('data-path');
+  if(el.id==='pin'){S.pin=el.value.trim();return;}
+  if(!path)return;
+  var tgt=S.ev||S.course;if(!tgt)return;
+  var v=el.type==='checkbox'?el.checked:el.value;
+  if(/\.(strokes|ghosts)$/.test(path))v=v===''?'':Number(v);
+  if(/\.start$/.test(path))v=Number(v);
+  if(S.course&&/^(par|hcp)\./.test(path))v=v===''?null:Number(v);
+  setPath(tgt,path,v);
+});
+root.addEventListener('change',function(e){var ev=new Event('input',{bubbles:true});e.target.dispatchEvent(ev);});
+
+root.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]');if(!el||S.busy)return;var a=el.getAttribute('data-act');S.msg=null;
+  if(a==='unlock'){
+    if(!S.pin){S.msg={k:'warn',t:'Enter the PIN.'};render();return;}
+    api({action:'checkPin'}).then(function(res){if(res){S.unlocked=true;ls.set('tom-pin',S.pin);}render();});return;}
+  if(a==='new'){
+    var cur=S.list.events.filter(function(x){return x.id===S.list.current;})[0]||S.list.events[0];
+    editEvent({name:'Roommates Scramble',date:today(),course:cur?cur.course:'',rooms:cur?cur.rooms:[newRoom()],makeCurrent:true});
+    S.msg={k:'ok',t:cur?'Rooms copied from '+cur.name+' ('+day(cur.date)+'). Change whatever is different this time.':'Add each room below.'};render();return;}
+  if(a==='edit'){editEvent(S.list.events.filter(function(x){return x.id===el.dataset.id;})[0]);render();return;}
+  if(a==='cancel'){S.ev=null;S.course=null;render();return;}
+  if(a==='room-add'){S.ev.rooms.push(newRoom());render();return;}
+  if(a==='room-del'){S.ev.rooms.splice(+el.dataset.i,1);render();return;}
+  if(a==='save-event'){
+    var ev=clone(S.ev);ev.rooms.forEach(function(r){r.p=r.p.filter(function(x){return String(x).trim();});});
+    api({action:'saveEvent',event:ev,makeCurrent:!!ev.makeCurrent}).then(function(res){if(res){S.msg={k:'ok',t:'Saved '+ev.name+'.'};S.ev=null;}render();});return;}
+  if(a==='current'||a==='final'||a==='reopen'){
+    var body=a==='current'?{action:'setCurrent',id:el.dataset.id}:{action:'setStatus',id:el.dataset.id,status:a==='final'?'final':'live'};
+    api(body).then(function(res){if(res)S.msg={k:'ok',t:a==='current'?'That event is on the scoreboard now.':a==='final'?'Marked final. It’s read-only on the scoreboard.':'Reopened for scores.'};render();});return;}
+  if(a==='course-new'){S.course={name:'',place:'',par:new Array(18).fill(null),hcp:new Array(18).fill(null)};render();return;}
+  if(a==='course-edit'){S.course=clone(S.list.courses[+el.dataset.i]);S.course.orig=S.course.name;render();return;}
+  if(a==='save-course'){
+    var k=S.course;
+    api({action:'saveCourse',course:{name:k.name,place:k.place,par:k.par,hcp:k.hcp}}).then(function(res){if(res){S.msg={k:'ok',t:'Saved '+k.name+'.'};S.course=null;}render();});return;}
+});
+
+render();
+if(S.pin)api({action:'checkPin'}).then(function(res){if(res)S.unlocked=true;render();});
+})();
+</script>
+</body>
+</html>

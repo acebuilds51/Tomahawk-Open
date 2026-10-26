@@ -13,7 +13,7 @@ Sheet.prototype={getLastRow(){return this.rows.length;},appendRow(r){this.rows.p
    clearContent(){for(let i=0;i<nr;i++)for(let j=0;j<nc;j++)sh.rows[r-1+i][c-1+j]='';}};}};
 const sheets={};
 const props={COMMITTEE_PIN:'2468'};
-const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null})},SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
+const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]||null,setProperty:(k,v)=>{props[k]=v;}})},SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null,insertSheet:n=>(sheets[n]=new Sheet())}),flush(){}},
  LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},
  ContentService:{MimeType:{JSON:'json'},createTextOutput:t=>({setMimeType(){return this;},text:t})},Date,JSON,Math,Number,String};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(ROOT,'apps-script','Code.gs'),'utf8'),ctx);ctx.setup();
@@ -81,7 +81,7 @@ let fails=0;const check=(name,ok,got)=>{console.log((ok?'PASS ':'FAIL ')+name+(o
  const w2=phone(); await wait(60);
  check('phone 2 sees tally',tally(w2)==='1-0 | Red leads 1–0',tally(w2));
  // Roommates still works on the same script
- const rm=JSON.parse(ctx.doGet().text); check('roommates GET unchanged',Object.keys(rm.scores).length===6&&'ticks' in rm,JSON.stringify(rm).slice(0,80));
+ const rm=JSON.parse(ctx.doGet().text); check('roommates GET unaffected',rm.event&&Object.keys(rm.scores).length===6,JSON.stringify(rm).slice(0,80));
  ctx.resetRyderCup(); check('resetRyderCup clears scores, keeps matchups',sheets['RC Scores'].rows.length===1&&sheets['RC Matches'].rows.length===7,sheets['RC Scores'].rows.length+'/'+sheets['RC Matches'].rows.length);
  console.log(fails?fails+' FAILED':'All passed');
  process.exit(fails?1:0);

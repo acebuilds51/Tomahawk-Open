@@ -117,76 +117,78 @@ summary{cursor:pointer;font-weight:600}
 .hb[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--on-gold)}
 :root{--on-gold:#231618}
 .pin{font:inherit;font-size:18px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;letter-spacing:.2em}
+.drives.pickme .drive{border:2px solid var(--warn);background:var(--warn-soft)}
+.banner a,.rules a{color:inherit;font-weight:600}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
 (function(){
-/* ===== Settings: change these lines only ===== */
+/* ===== Settings ===== */
 var API_URL='https://script.google.com/macros/s/AKfycbxE2TauUGWd6oawawxkVuR8aaFRzWqLTdq4pd0EezxxryBKuxtaFhfOrtG4C8ZGvlQxAg/exec';   // Apps Script Web app URL, ends in /exec
-var EVENT_LINE='Tomahawk Open 2026 · Meadowlands GC · Mon Oct 12';
-var PAR=[4,4,4,5,3,4,4,3,5,4,3,4,4,5,3,4,4,5];
-var HCP=[7,5,1,15,13,3,17,11,9,12,10,4,2,14,18,6,16,8];
-// strokes: taken off the room's total (from the committee's cards).
-// ghosts: how many ghost holes the room may use; perSide = that many on the front 9 AND on the back 9.
-var TEAMS=[
-  {id:'1707',p:['Rock','Opie','Gumby','Teo'],strokes:1.5,ghosts:3,perSide:false},
-  {id:'905',p:['Fitz','Blanch','Scoobie','Doc'],strokes:1.5,ghosts:3,perSide:false},
-  {id:'906',p:['Moses','Jimmy C','Angelo'],strokes:0,ghosts:1,perSide:true,note:'Threesome (Chub-Rock is out): one player hits an extra ball every shot.'},
-  {id:'205',p:['Nater','Nooner','Flyin Pat','Ace'],strokes:0,ghosts:1,perSide:true},
-  {id:'505',p:['Fairway Ninja','Kripla','Welks','Kipper'],strokes:3,ghosts:4,perSide:false},
-  {id:'1605',p:['PT','Zen','Billy'],strokes:0,ghosts:1,perSide:true,note:'Threesome (Smitty is out): one player hits an extra ball every shot.'}
-];
-/* ============================================= */
+/* Everything else (course, rooms, strokes, ghost holes, starting nines) comes from the event,
+   which the committee sets up on setup.html. */
+/* ===================== */
 var POLL_MS=10000;
 var KEY='rm27';
 var root=document.getElementById('root');
-var HARD=HCP.map(function(v,i){return {h:i+1,v:v};}).sort(function(a,b){return a.v-b.v;}).map(function(o){return o.h;});
 var configured=/^https:\/\/script\.google(usercontent)?\.com\//.test(API_URL);
+var params=new URLSearchParams(location.search);
+var VIEW=params.get('event')||'';      // '' = the current event; otherwise a past event by id
 
 function store(){return {get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};}
 var ls=store();
 function readJSON(k,d){try{var v=JSON.parse(ls.get(k)||'null');return v==null?d:v;}catch(e){return d;}}
 
-function emptyState(){var s={scores:{},drives:{},ghost:{},updated:null};TEAMS.forEach(function(t){s.scores[t.id]={};s.drives[t.id]={};s.ghost[t.id]={};});return s;}
+/* ---------- State ---------- */
+function cleanEvent(e){
+  if(!e||!e.id||!Array.isArray(e.rooms))return null;
+  var par=(e.par||[]).map(Number),hcp=(e.hcp||[]).map(Number);
+  if(par.length!==18)par=[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4];
+  if(hcp.length!==18)hcp=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
+  return {id:String(e.id),name:String(e.name||''),date:String(e.date||''),course:String(e.course||''),place:String(e.place||''),
+    status:e.status==='final'?'final':'live',current:!!e.current,par:par,hcp:hcp,
+    rooms:e.rooms.map(function(r){return {id:String(r.id),p:(r.p||[]).map(String).filter(Boolean),strokes:+r.strokes||0,
+      ghosts:+r.ghosts||0,perSide:!!r.perSide,start:+r.start===10?10:1,note:r.note?String(r.note):''};})};
+}
+function emptyState(ev){var s={event:ev,scores:{},drives:{},ghost:{},updated:null};if(ev)ev.rooms.forEach(function(t){s.scores[t.id]={};s.drives[t.id]={};s.ghost[t.id]={};});return s;}
 // The Sheet's Drive column holds "Rock", or "Rock|ghost" when the room used a ghost hole there.
 function packDrive(p,g){return p+(g?'|ghost':'');}
 function setDrive(s,room,h,raw){var parts=String(raw||'').split('|');delete s.drives[room][h];delete s.ghost[room][h];
   if(parts[0])s.drives[room][h]=parts[0];if(parts[1]==='ghost')s.ghost[room][h]=true;}
-function normalize(s){var o=emptyState();if(!s)return o;
-  TEAMS.forEach(function(t){var sc=(s.scores&&s.scores[t.id])||{};for(var h in sc){var n=+h,v=+sc[h];if(n>=1&&n<=18&&v>=1)o.scores[t.id][n]=v;}
+function normalize(s){
+  var o=emptyState(cleanEvent(s&&s.event));if(!s||!o.event)return o;
+  o.event.rooms.forEach(function(t){var sc=(s.scores&&s.scores[t.id])||{};for(var h in sc){var n=+h,v=+sc[h];if(n>=1&&n<=18&&v>=1)o.scores[t.id][n]=v;}
     var dv=(s.drives&&s.drives[t.id])||{};for(var k in dv){if(o.scores[t.id][+k]!=null&&dv[k])setDrive(o,t.id,+k,dv[k]);}});
   o.updated=s.updated||null;return o;}
 
-var server=normalize(readJSON(KEY+'-cache',null));   // last copy from the Sheet
-var queue=readJSON(KEY+'-queue',[]);                  // saves not yet confirmed by the Sheet
+var CACHE=KEY+'-cache'+(VIEW?'-'+VIEW:'');
+var server=normalize(readJSON(CACHE,null));            // last copy from the Sheet
+var queue=readJSON(KEY+'-queue',[]);                    // saves not yet confirmed by the Sheet
 if(!Array.isArray(queue))queue=[];
-var net={ok:null,lastOk:null,flushing:false,loading:false};
+var net={ok:null,flushing:false,loading:false};
 var state=server;
 
 function applyQueue(){
   var s=JSON.parse(JSON.stringify(server));
   queue.forEach(function(op){
-    if(!s.scores[op.room])return;
+    if(!s.event||op.event!==s.event.id||!s.scores[op.room])return;
     if(op.action==='score'){s.scores[op.room][op.hole]=op.strokes;setDrive(s,op.room,op.hole,op.drive);}
     else if(op.action==='clear'){delete s.scores[op.room][op.hole];setDrive(s,op.room,op.hole,'');}
   });
   state=s;
 }
 applyQueue();
-function team(id){return TEAMS.filter(function(t){return t.id===id;})[0];}
-/* Ghost holes: each room has its own allowance (from the committee's cards). */
-function ghostInfo(t){
-  var g=state.ghost[t.id],used=[],front=0,back=0;
-  for(var h=1;h<=18;h++)if(g[h]){used.push(h);if(h<=9)front++;else back++;}
-  return {used:used,front:front,back:back};
-}
-function ghostRule(t){return t.perSide?t.ghosts+' on the front 9 and '+t.ghosts+' on the back 9':t.ghosts+' any time';}
-function ghostLeft(t,h){var x=ghostInfo(t);if(t.perSide)return t.ghosts-(h<=9?x.front:x.back);return t.ghosts-x.used.length;}
-function ghostText(t){var x=ghostInfo(t);
-  if(t.perSide)return 'Front '+(x.front>=t.ghosts?'used (#'+x.used.filter(function(h){return h<=9;}).join(', #')+')':'available')+' · Back '+(x.back>=t.ghosts?'used (#'+x.used.filter(function(h){return h>9;}).join(', #')+')':'available');
-  return x.used.length+' of '+t.ghosts+' used'+(x.used.length?' (#'+x.used.join(', #')+')':'');}
+function EV(){return state.event;}
+function ROOMS(){return EV()?EV().rooms:[];}
+function PAR(h){return EV().par[h-1];}
+function team(id){return ROOMS().filter(function(t){return t.id===id;})[0];}
+function canScore(){return !!EV()&&EV().status!=='final'&&!VIEW;}
+/* Starting nine: a room that starts on 10 plays 10-18, then 1-9. */
+function order(t){var o=[];for(var i=0;i<18;i++)o.push(((t.start===10?9:0)+i)%18+1);return o;}
+function hardest(){return EV().hcp.map(function(v,i){return {h:i+1,v:v};}).sort(function(a,b){return a.v-b.v;}).map(function(o){return o.h;});}
+
 /* Drives: every player's tee shot must be used at least 2 times over 18 holes. */
 function driveInfo(t){
   var d=state.drives[t.id],s=state.scores[t.id],count={},played=0;
@@ -196,32 +198,44 @@ function driveInfo(t){
   return {count:count,need:need,short:short,left:18-played};
 }
 function needLine(t){
+  if(!canScore())return '';
   var x=driveInfo(t);if(!x.need||x.left>x.need+3)return '';
   if(x.need>x.left)return '<div class="need">Not enough holes left for 2 drives each. Still short: '+x.short.map(esc).join(', ')+'</div>';
   return '<div class="need">'+x.left+' holes left, still need: '+x.short.map(esc).join(', ')+'</div>';
 }
+/* Ghost holes: each room has its own allowance (set by the committee). */
+function ghostInfo(t){var g=state.ghost[t.id],used=[],front=0,back=0;
+  for(var h=1;h<=18;h++)if(g[h]){used.push(h);if(h<=9)front++;else back++;}
+  return {used:used,front:front,back:back};}
+function ghostRule(t){if(!t.ghosts)return 'none';return t.perSide?t.ghosts+' on the front 9 and '+t.ghosts+' on the back 9':t.ghosts+' any time';}
+function ghostLeft(t,h){var x=ghostInfo(t);if(t.perSide)return t.ghosts-(h<=9?x.front:x.back);return t.ghosts-x.used.length;}
+function ghostText(t){var x=ghostInfo(t);if(!t.ghosts)return 'None';
+  var list=function(a){return a.length?' (#'+a.join(', #')+')':'';};
+  if(t.perSide){var f=x.used.filter(function(h){return h<=9;}),b=x.used.filter(function(h){return h>9;});
+    return 'Front '+(f.length>=t.ghosts?'used'+list(f):(f.length?f.length+' of '+t.ghosts+' used'+list(f):'available'))+' · Back '+(b.length>=t.ghosts?'used'+list(b):(b.length?b.length+' of '+t.ghosts+' used'+list(b):'available'));}
+  return x.used.length+' of '+t.ghosts+' used'+list(x.used);}
 
 var keeper=ls.get(KEY+'-keeper')==='1';
-var savedTeam=ls.get(KEY+'-team');
-var ui={team:TEAMS.some(function(t){return t.id===savedTeam;})?savedTeam:TEAMS[0].id,hole:null,v:null,msg:null};
+var ui={team:ls.get(KEY+'-team')||'',hole:null,v:null,msg:null,err:null,past:null};
 
-function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function num(n){var a=Math.abs(n),w=Math.floor(a+1e-9),f=a-w>0.25;return (w===0&&f?'':String(w))+(f?'½':'');}
 function rel(n){return Math.abs(n)<1e-9?'E':n>0?'+'+num(n):'−'+num(n);}
 function clock(iso){if(!iso)return '';try{return new Date(iso).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});}catch(e){return '';}}
-function nextHole(id){var s=state.scores[id];for(var h=1;h<=18;h++)if(s[h]==null)return h;return 18;}
+function day(d){try{var p=d.split('-');return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString([], {weekday:'short',month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}}
+function nextHole(t){var s=state.scores[t.id],o=order(t);for(var i=0;i<18;i++)if(s[o[i]]==null)return o[i];return o[17];}
 
-function stat(t){var s=state.scores[t.id],n=0,gross=0,par=0,last=0;
-  for(var h=1;h<=18;h++){if(s[h]==null)continue;n++;gross+=s[h];par+=PAR[h-1];last=h;}
+function stat(t){var s=state.scores[t.id],n=0,gross=0,par=0;
+  for(var h=1;h<=18;h++){if(s[h]==null)continue;n++;gross+=s[h];par+=PAR(h);}
   // Net = to par minus the room's strokes (the full allowance, the way the card is scored).
-  return {t:t,n:n,gross:gross,toPar:gross-par,net:gross-par-(t.strokes||0),last:last};}
+  return {t:t,n:n,gross:gross,toPar:gross-par,net:gross-par-(t.strokes||0)};}
+function thru(r){if(!r.n)return 'Not started';if(r.n===18)return 'Final';return 'Thru '+r.n+(r.t.start===10?'*':'');}
 function countback(a,b){
-  var sa=state.scores[a.t.id],sb=state.scores[b.t.id];
-  for(var i=0;i<HARD.length;i++){var h=HARD[i];if(sa[h]==null||sb[h]==null)continue;if(sa[h]!==sb[h])return sa[h]-sb[h];}
+  var sa=state.scores[a.t.id],sb=state.scores[b.t.id],hard=hardest();
+  for(var i=0;i<hard.length;i++){var h=hard[i];if(sa[h]==null||sb[h]==null)continue;if(sa[h]!==sb[h])return sa[h]-sb[h];}
   return 0;}
 function standings(){
-  var rows=TEAMS.map(stat);
+  var rows=ROOMS().map(stat);
   rows.sort(function(a,b){if(!a.n&&!b.n)return 0;if(!a.n)return 1;if(!b.n)return -1;if(a.net!==b.net)return a.net-b.net;return countback(a,b);});
   var pos=0;rows.forEach(function(r,i){
     if(!r.n){r.pos='–';return;}
@@ -232,6 +246,7 @@ function standings(){
 
 function liveLine(){
   if(!configured)return '';
+  if(EV()&&(EV().status==='final'||VIEW))return EV().status==='final'?'Final results':'';
   var waiting=queue.length?' · '+queue.length+' save'+(queue.length>1?'s':'')+' waiting for signal':'';
   if(net.ok===false)return '<span class="live"><span class="dot off"></span>No connection, retrying'+waiting+'</span>';
   if(net.ok===null)return '<span class="live">Loading scores…</span>';
@@ -239,16 +254,18 @@ function liveLine(){
 }
 
 function boardHtml(rows){
-  var started=rows.some(function(r){return r.n;});
+  var e=EV(),started=rows.some(function(r){return r.n;}),anyBack=ROOMS().some(function(t){return t.start===10;});
   var lb=rows.map(function(r){
     var p=typeof r.pos==='number'?r.pos:0;
     var label=typeof r.pos==='number'?((r.tie?'T':'')+r.pos):'–';
-    var thru=!r.n?'Not started':r.n===18?'Final':'Thru '+r.last;
-    return '<div class="lr'+(p&&p<=3?' p'+p:'')+'"><span class="pos">'+label+'</span><span class="nm"><b>Room '+r.t.id+'</b><span>'+r.t.p.map(esc).join(' · ')+'</span></span><span class="th">'+thru+'</span><span class="sc">'+(r.n?rel(r.net):'–')+'</span></div>';
+    return '<div class="lr'+(p&&p<=3?' p'+p:'')+'"><span class="pos">'+label+'</span><span class="nm"><b>Room '+esc(r.t.id)+'</b><span>'+r.t.p.map(esc).join(' · ')+'</span></span><span class="th">'+thru(r)+'</span><span class="sc">'+(r.n?rel(r.net):'–')+'</span></div>';
   }).join('');
-  var note=started?'Score is to par, minus each room’s strokes. Top 3 rooms win a pot.':'Par 72 · Top 3 rooms win a pot';
-  return '<header class="board"><div class="logo" role="img" aria-label="Tomahawk Open 2026: Fairways, Friends, Filets"></div><div class="eyebrow">'+esc(EVENT_LINE)+'</div>'+
-    '<h1>Roommates Scramble</h1><div class="lb">'+lb+'</div>'+
+  var anyStrokes=ROOMS().some(function(t){return t.strokes;});
+  var note=started?'Score is to par'+(anyStrokes?', minus each room’s strokes':'')+'. Top 3 rooms win a pot.':'Par '+e.par.reduce(function(a,b){return a+b;},0)+' · Top 3 rooms win a pot';
+  if(anyBack)note+=' · * started on #10';
+  var line=[e.course,day(e.date)].filter(Boolean).join(' · ');
+  return '<header class="board"><div class="logo" role="img" aria-label="Tomahawk Open: Fairways, Friends, Filets"></div><div class="eyebrow">'+esc(line)+'</div>'+
+    '<h1>'+esc(e.name||'Roommates Scramble')+'</h1><div class="lb">'+lb+'</div>'+
     '<p class="sub">'+note+'</p><p class="sub">'+liveLine()+'</p></header>';
 }
 
@@ -256,74 +273,103 @@ function teamHtml(r){
   var s=state.scores[r.t.id],g=state.ghost[r.t.id],cells='';
   for(var h=1;h<=18;h++){var v=s[h];var lab=h+(g[h]?'<sup>G</sup>':'');
     if(v==null){cells+='<div class="hc e">'+lab+'<b>&nbsp;</b></div>';continue;}
-    var d=v-PAR[h-1];cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+lab+'<b>'+v+'</b></div>';}
+    var d=v-PAR(h);cells+='<div class="hc '+(d<0?'u':d>0?'o':'')+'">'+lab+'<b>'+v+'</b></div>';}
   var pot=(typeof r.pos==='number'&&r.pos<=3&&r.n)?'<span class="pot">Pot '+r.pos+'</span>':'';
   var st=r.t.strokes?'<span>Their strokes <b>'+num(r.t.strokes)+'</b></span><span>Net <b>'+(r.n?rel(r.net):'–')+'</b></span>':'';
   var di=driveInfo(r.t);
   var drv='<div class="drv"><span>Drives:</span>'+r.t.p.map(function(p){return '<span'+(di.count[p]<2?' class="short"':'')+'>'+esc(p)+' <b>'+di.count[p]+'</b></span>';}).join('')+'</div>';
   var gh='<div class="drv"><span>Ghost holes ('+ghostRule(r.t)+'):</span><span><b>'+ghostText(r.t)+'</b></span></div>';
-  return '<article class="team"><div class="ttop"><span class="tn">Room '+r.t.id+pot+'</span><span class="pl">'+r.t.p.map(esc).join(', ')+'</span></div>'+
-    (r.t.note?'<p class="legend">'+esc(r.t.note)+'</p>':'')+
-    '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.last||0)+'</b></span><span>Score <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+st+'</div>'+
+  var notes=(r.t.start===10?'<p class="legend">Started on the back nine (#10).</p>':'')+(r.t.note?'<p class="legend">'+esc(r.t.note)+'</p>':'');
+  return '<article class="team"><div class="ttop"><span class="tn">Room '+esc(r.t.id)+pot+'</span><span class="pl">'+r.t.p.map(esc).join(', ')+'</span></div>'+notes+
+    '<div class="stats"><span>Thru <b>'+(r.n===18?'18 (final)':r.n)+'</b></span><span>Score <b>'+(r.n?r.gross:'–')+'</b></span><span>To par <b>'+(r.n?rel(r.toPar):'–')+'</b></span>'+st+'</div>'+
     '<div class="holes" aria-label="Hole by hole scores">'+cells+'</div>'+drv+gh+needLine(r.t)+'</article>';
 }
 
 function rulesHtml(){
-  return '<section class="rules"><h2>Today’s rules</h2>'+
-    '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green. Rooms 906 and 1605 are threesomes today: one player hits an extra ball every shot.</p>'+
+  var rs=ROOMS(),withStrokes=rs.filter(function(t){return t.strokes;});
+  var strokes=withStrokes.length?withStrokes.map(function(t){return 'Room '+esc(t.id)+' '+num(t.strokes);}).join(', ')+'; everyone else 0.':'No rooms get strokes.';
+  var ghosts=rs.map(function(t){return 'Room '+esc(t.id)+': '+ghostRule(t);}).join('; ')+'.';
+  var three=rs.filter(function(t){return t.p.length===3;}).map(function(t){return esc(t.id);});
+  return '<section class="rules"><h2>Rules</h2>'+
+    '<p>4-man scramble with your roommates. Best shot tee to green, within one club length, no closer, no improving your lie, no club length on the green.'+(three.length?' Room'+(three.length>1?'s ':' ')+three.join(' and ')+(three.length>1?' are threesomes':' is a threesome')+': one player hits an extra ball every shot.':'')+'</p>'+
     '<p>At least 2 tee shots from every player over 18 holes. No breakfast balls off #1. Each room’s card counts whose drive was used.</p>'+
-    '<p>Strokes (from the committee): Rooms 1707 and 905 get 1½, Room 505 gets 3, the rest get 0. They come off the room’s total.</p>'+
+    '<p>Strokes (from the committee): '+strokes+' They come off the room’s total.</p>'+
     '<p>No 3-putts: miss the first putt and the second is a gimme. Max 2 putts a hole.</p>'+
-    '<p>Ghost holes: once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out. Rooms 906, 205 and 1605 get 1 per side; 1707 and 905 get 3 any time; 505 gets 4 any time. Holes where a room used one show a G.</p>'+
-    '<p>Ties: 4-hole putt-off if there’s daylight, otherwise best score on the hardest hole on the card (#3, then #13, #6 and so on).</p></section>';
+    '<p>Ghost holes: once on the green, you can putt at the old plugged hole between two tees. It must roll fully through without knocking a tee out. '+ghosts+' Holes where a room used one show a G.</p>'+
+    '<p>Ties: 4-hole putt-off if there’s daylight, otherwise best score on the hardest hole on the card (#'+hardest().slice(0,3).join(', then #')+' and so on).</p></section>';
 }
 
 function keeperHtml(){
-  var id=ui.team,s=state.scores[id];
-  if(ui.hole==null)ui.hole=nextHole(id);
+  if(!team(ui.team))ui.team=ROOMS()[0].id;
+  var t=team(ui.team),id=t.id,s=state.scores[id];
+  if(ui.hole==null)ui.hole=nextHole(t);
   var h=ui.hole,ex=s[h];
-  if(ui.v==null)ui.v=ex!=null?ex:PAR[h-1];
+  if(ui.v==null)ui.v=ex!=null?ex:PAR(h);
   if(ui.drive===undefined)ui.drive=state.drives[id][h]||null;
   if(ui.ghost===undefined)ui.ghost=!!state.ghost[id][h];
-  var team=TEAMS.filter(function(t){return t.id===id;})[0];
-  var di=driveInfo(team);
-  var drives='<div><span class="lab">Whose drive did you use?</span><div class="drives">'+team.p.map(function(p){
+  var di=driveInfo(t);
+  var drives='<div><span class="lab">Whose drive did you use?</span><div class="drives'+(ui.err?' pickme':'')+'">'+t.p.map(function(p){
     return '<button class="drive" data-act="drive" data-p="'+esc(p)+'" aria-pressed="'+(ui.drive===p)+'">'+esc(p)+'<small>'+di.count[p]+' used</small></button>';}).join('')+'</div></div>';
-  var left=ghostLeft(team,h)+(state.ghost[id][h]?1:0);   // a hole that already used one can keep it
-  var notes='<div><span class="lab">Ghost hole ('+ghostRule(team)+')</span><div class="drives">'+
-    '<button class="drive" data-act="ghost-no" aria-pressed="'+(!ui.ghost)+'">Not used</button>'+
-    '<button class="drive" data-act="ghost-yes" aria-pressed="'+ui.ghost+'">Used one here<small>'+Math.max(0,left)+' left'+(team.perSide?(h<=9?' on the front':' on the back'):'')+'</small></button></div></div>';
-  var picks=TEAMS.map(function(t){return '<button class="pick" data-act="pick" data-t="'+t.id+'" aria-pressed="'+(t.id===id)+'">'+t.id+'</button>';}).join('');
-  var opts='';for(var x=1;x<=18;x++){opts+='<option value="'+x+'"'+(x===h?' selected':'')+'>Hole '+x+' · Par '+PAR[x-1]+(s[x]!=null?' · saved '+s[x]:'')+'</option>';}
-  var d=ui.v-PAR[h-1],word=d<=-3?'Albatross':d===-2?'Eagle':d===-1?'Birdie':d===0?'Par':d===1?'Bogey':d===2?'Double bogey':rel(d);
+  var ghost='';
+  if(t.ghosts){
+    var left=ghostLeft(t,h)+(state.ghost[id][h]?1:0);   // a hole that already used one can keep it
+    ghost='<div><span class="lab">Ghost hole ('+ghostRule(t)+')</span><div class="drives">'+
+      '<button class="drive" data-act="ghost-no" aria-pressed="'+(!ui.ghost)+'">Not used</button>'+
+      '<button class="drive" data-act="ghost-yes" aria-pressed="'+ui.ghost+'">Used one here<small>'+Math.max(0,left)+' left'+(t.perSide?(h<=9?' on the front':' on the back'):'')+'</small></button></div></div>';
+  }
+  var picks=ROOMS().map(function(r){return '<button class="pick" data-act="pick" data-t="'+esc(r.id)+'" aria-pressed="'+(r.id===id)+'">'+esc(r.id)+'</button>';}).join('');
+  var opts=order(t).map(function(x){return '<option value="'+x+'"'+(x===h?' selected':'')+'>Hole '+x+' · Par '+PAR(x)+(s[x]!=null?' · saved '+s[x]:'')+'</option>';}).join('');
+  var d=ui.v-PAR(h),word=d<=-3?'Albatross':d===-2?'Eagle':d===-1?'Birdie':d===0?'Par':d===1?'Bogey':d===2?'Double bogey':rel(d);
   var msg=ui.msg?'<div class="msg'+(ui.msg.k==='ok'?' ok':'')+'" role="status">'+esc(ui.msg.t)+'</div>':'';
+  var err=ui.err?'<div class="msg" role="alert">'+esc(ui.err)+'</div>':'';
   return '<section class="keeper" id="keeper"><h2>Enter a hole</h2>'+msg+
-    '<div><span class="lab">Room</span><div class="picks">'+picks+'</div><p class="note">'+team.p.map(esc).join(', ')+'</p></div>'+
+    '<div><span class="lab">Room</span><div class="picks">'+picks+'</div><p class="note">'+t.p.map(esc).join(', ')+(t.start===10?' · starting on #10':'')+'</p></div>'+
     '<div><label class="lab" for="hole-sel">Hole</label><select id="hole-sel" data-act="hole">'+opts+'</select></div>'+
     '<div class="step"><div class="row"><button class="sb" data-act="v-" aria-label="Score down">−</button><span class="v">'+ui.v+'</span><button class="sb" data-act="v+" aria-label="Score up">+</button></div><span class="rel">'+word+'</span></div>'+
-    drives+needLine(team)+notes+
+    drives+needLine(t)+ghost+err+
     '<button class="save" data-act="save-hole">'+(ex!=null?'Update hole '+h:'Save hole '+h)+'</button>'+
     (ex!=null?'<button class="ghost" data-act="clear-hole">Remove hole '+h+' score</button>':'')+'</section>';
 }
 
+function pastHtml(){
+  if(!ui.past)return '<button class="ghost" data-act="past">Past events</button>';
+  if(ui.past==='loading')return '<p>Loading past events…</p>';
+  if(ui.past==='error')return '<p>Couldn’t load past events. <button class="ghost" data-act="past">Try again</button></p>';
+  var cur=EV()?EV().id:'';
+  return '<section class="rules"><h2>Past events</h2>'+ui.past.map(function(e){
+    return '<p><a href="?event='+encodeURIComponent(e.id)+'">'+esc(e.name)+'</a> · '+esc(e.course)+' · '+esc(day(e.date))+(e.id===cur&&!VIEW?' (this one)':'')+(e.current&&VIEW?' (current)':'')+'</p>';}).join('')+'</section>';
+}
+
 function render(){
-  var rows=standings(),h='<div class="wrap">';
+  var h='<div class="wrap">';
   if(!configured)h+='<div class="banner">Setup not finished: paste the Apps Script Web app URL into API_URL at the top of the script.</div>';
-  h+=boardHtml(rows)+rows.map(teamHtml).join('')+rulesHtml();
-  if(keeper)h+=keeperHtml();
-  h+='<footer class="foot">'+(keeper?'<button class="ghost" data-act="keeper-off">Hide scorekeeper tools</button>':'<button class="ghost" data-act="keeper-on">I’m keeping score</button>')+
-    '<span>Scores show up on every phone within about 10 seconds.</span></footer></div>';
+  if(VIEW)h+='<div class="banner">You’re looking at a past event. <a href="./">Go to the current scoreboard</a></div>';
+  if(!EV()){
+    h+='<div class="board"><h1>Roommates Scramble</h1><p class="sub">'+(net.ok===false?(VIEW?'That event wasn’t found, or there’s no connection.':'No connection yet. Retrying…'):'Loading…')+'</p></div>';
+  }else{
+    var rows=standings();
+    h+=boardHtml(rows)+rows.map(teamHtml).join('')+rulesHtml();
+    if(keeper&&canScore())h+=keeperHtml();
+  }
+  h+='<footer class="foot">';
+  if(canScore())h+=(keeper?'<button class="ghost" data-act="keeper-off">Hide scorekeeper tools</button>':'<button class="ghost" data-act="keeper-on">I’m keeping score</button>')+
+    '<span>Scores show up on every phone within about 10 seconds.</span>';
+  h+=pastHtml()+'</footer></div>';
   var y=window.scrollY;root.innerHTML=h;window.scrollTo(0,y);
 }
 
 /* ---------- Talking to the Sheet ---------- */
 function saveQueue(){ls.set(KEY+'-queue',JSON.stringify(queue));}
-function takeServer(s){server=normalize(s);ls.set(KEY+'-cache',JSON.stringify(server));net.ok=true;net.lastOk=Date.now();applyQueue();}
+function takeServer(s){
+  var n=normalize(s);
+  if(!n.event){net.ok=false;return;}
+  if(server.event&&n.event.id!==server.event.id){ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;}   // the committee switched events
+  server=n;ls.set(CACHE,JSON.stringify(s));net.ok=true;applyQueue();}
 
 function load(){
   if(!configured||net.loading||net.flushing)return Promise.resolve();
   net.loading=true;
-  return fetch(API_URL+(API_URL.indexOf('?')<0?'?':'&')+'t='+Date.now(),{cache:'no-store'})
+  return fetch(API_URL+(API_URL.indexOf('?')<0?'?':'&')+(VIEW?'event='+encodeURIComponent(VIEW)+'&':'')+'t='+Date.now(),{cache:'no-store'})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(s){if(!net.flushing){takeServer(s);}net.loading=false;render();})
     .catch(function(){net.loading=false;net.ok=false;render();});
@@ -334,19 +380,19 @@ function flush(){
   if(!configured||net.flushing||!queue.length)return;
   net.flushing=true;
   var op=queue[0];
-  var body={action:op.action,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive};
+  var body={action:op.action,event:op.event,room:op.room,hole:op.hole,strokes:op.strokes,drive:op.drive};
   fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('http '+r.status);return r.json();})
     .then(function(res){
       net.flushing=false;
       if(res&&res.ok){
-        queue.shift();saveQueue();takeServer(res);
-      }else if(res&&(res.error==='busy')){
+        queue.shift();saveQueue();if(!VIEW&&res.event&&res.event.current)takeServer(res);else applyQueue();
+      }else if(res&&res.error==='busy'){
         throw new Error('busy');
       }else{
         // The Sheet rejected it; drop it so it doesn't block the rest.
         queue.shift();saveQueue();applyQueue();
-        ui.msg={k:'warn',t:'One save was rejected by the scoreboard. Check that hole and enter it again.'};
+        ui.msg={k:'warn',t:res&&res.error==='event_final'?'That event is finished, so the score wasn’t saved.':'One save was rejected by the scoreboard. Check that hole and enter it again.'};
       }
       render();
       if(queue.length)flush();
@@ -358,46 +404,54 @@ function flush(){
 }
 
 function enqueue(op,okText){
+  op.event=EV().id;
   // A newer save for the same hole replaces an unsent older one.
-  if(op.action==='score'||op.action==='clear')queue=queue.filter(function(q){return !((q.action==='score'||q.action==='clear')&&q.room===op.room&&q.hole===op.hole&&q!==queue[0]);});
+  queue=queue.filter(function(q,i){return i===0||!(q.event===op.event&&q.room===op.room&&q.hole===op.hole);});
   queue.push(op);saveQueue();applyQueue();
-  ui.msg={k:'ok',t:okText};
+  ui.msg={k:'ok',t:okText};ui.err=null;
   ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;
   render();flush();
 }
+function resetHole(){ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;ui.err=null;}
 
 root.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;var a=el.getAttribute('data-act');
   if(a==='hole')return;
-  if(a==='drive'){ui.drive=el.getAttribute('data-p');render();return;}
+  if(a==='past'){ui.past='loading';render();
+    fetch(API_URL+'?list=1&t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();})
+      .then(function(l){ui.past=(l.events||[]);render();}).catch(function(){ui.past='error';render();});return;}
+  if(a==='drive'){ui.drive=el.getAttribute('data-p');ui.err=null;render();return;}
   if(a==='ghost-no'){ui.ghost=false;render();return;}
   if(a==='ghost-yes'){
     var gt=team(ui.team),had=!!state.ghost[ui.team][ui.hole];
-    if(!had&&ghostLeft(gt,ui.hole)<=0){ui.msg={k:'warn',t:'Room '+ui.team+' has no ghost holes left'+(gt.perSide?(ui.hole<=9?' on the front 9':' on the back 9'):'')+' ('+ghostRule(gt)+').'};render();return;}
-    ui.ghost=true;render();return;}
+    if(!had&&ghostLeft(gt,ui.hole)<=0){ui.err='Room '+ui.team+' has no ghost holes left'+(gt.perSide?(ui.hole<=9?' on the front 9':' on the back 9'):'')+' ('+ghostRule(gt)+').';render();return;}
+    ui.ghost=true;ui.err=null;render();return;}
   if(a==='keeper-on'){keeper=true;ls.set(KEY+'-keeper','1');render();var k=document.getElementById('keeper');if(k&&k.scrollIntoView)k.scrollIntoView({behavior:'smooth',block:'start'});return;}
   if(a==='keeper-off'){keeper=false;ls.set(KEY+'-keeper','0');render();return;}
-  if(a==='pick'){ui.team=el.getAttribute('data-t');ui.hole=null;ui.v=null;ui.drive=undefined;ui.ghost=undefined;ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
+  if(a==='pick'){ui.team=el.getAttribute('data-t');resetHole();ui.msg=null;ls.set(KEY+'-team',ui.team);render();return;}
   if(a==='v-'){ui.v=Math.max(1,ui.v-1);render();return;}
   if(a==='v+'){ui.v=Math.min(15,ui.v+1);render();return;}
-  if(!configured){ui.msg={k:'warn',t:'Saving isn’t set up yet.'};render();return;}
+  if(!configured){ui.err='Saving isn’t set up yet.';render();return;}
   if(a==='save-hole'){
-    if(!ui.drive){ui.msg={k:'warn',t:'Tap whose drive you used, then save.'};render();return;}
+    // Shown right above the Save button, where the scorekeeper is looking.
+    if(!ui.drive){ui.err='Tap whose drive you used, then tap Save.';ui.msg=null;render();return;}
     var h=ui.hole,v=ui.v,dr=ui.drive,gh=!!ui.ghost;
     enqueue({action:'score',room:ui.team,hole:h,strokes:v,drive:packDrive(dr,gh)},'Hole '+h+' saved ('+v+', '+dr+'’s drive'+(gh?', ghost hole':'')+').');return;}
   if(a==='clear-hole'){var h2=ui.hole;enqueue({action:'clear',room:ui.team,hole:h2},'Hole '+h2+' removed.');return;}
 });
 root.addEventListener('change',function(e){
   var el=e.target;
-  if(el.getAttribute('data-act')==='hole'){ui.hole=+el.value;ui.v=null;ui.drive=undefined;ui.ghost=undefined;render();}
+  if(el.getAttribute('data-act')==='hole'){var keep=ui.msg;resetHole();ui.hole=+el.value;ui.msg=keep;render();}
 });
 
 render();
 if(configured){
   load().then(flush);
-  setInterval(function(){if(!document.hidden){if(queue.length)flush();else load();}},POLL_MS);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden){if(queue.length)flush();else load();}});
-  window.addEventListener('online',function(){flush();load();});
+  if(!VIEW){
+    setInterval(function(){if(!document.hidden){if(queue.length)flush();else load();}},POLL_MS);
+    document.addEventListener('visibilitychange',function(){if(!document.hidden){if(queue.length)flush();else load();}});
+    window.addEventListener('online',function(){flush();load();});
+  }
 }
 })();
 </script>
